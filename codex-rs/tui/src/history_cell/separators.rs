@@ -1,6 +1,7 @@
 //! Turn separators and runtime-metrics labels for transcript history.
 
 use super::*;
+use fluent_bundle::FluentArgs;
 
 #[derive(Debug)]
 /// A visual divider between turns, optionally showing how long the assistant "worked for".
@@ -23,20 +24,32 @@ impl FinalMessageSeparator {
             runtime_metrics,
         }
     }
-}
-impl HistoryCell for FinalMessageSeparator {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+
+    pub(crate) fn label_parts_with_localizer(
+        &self,
+        localizer: &crate::i18n::Localizer,
+    ) -> Vec<String> {
         let mut label_parts = Vec::new();
         if let Some(elapsed_seconds) = self
             .elapsed_seconds
             .filter(|seconds| *seconds > 60)
             .map(crate::status_indicator_widget::fmt_elapsed_compact)
         {
-            label_parts.push(format!("Worked for {elapsed_seconds}"));
+            let mut args = FluentArgs::new();
+            args.set("duration", elapsed_seconds.as_str());
+            label_parts.push(localizer.text("history-worked-for", Some(&args), || {
+                format!("Worked for {elapsed_seconds}")
+            }));
         }
         if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
             label_parts.push(metrics_label);
         }
+        label_parts
+    }
+}
+impl HistoryCell for FinalMessageSeparator {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let label_parts = self.label_parts_with_localizer(crate::i18n::global());
 
         if label_parts.is_empty() {
             return vec![Line::from_iter(["─".repeat(width as usize).dim()])];
@@ -54,17 +67,7 @@ impl HistoryCell for FinalMessageSeparator {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        let mut label_parts = Vec::new();
-        if let Some(elapsed_seconds) = self
-            .elapsed_seconds
-            .filter(|seconds| *seconds > 60)
-            .map(crate::status_indicator_widget::fmt_elapsed_compact)
-        {
-            label_parts.push(format!("Worked for {elapsed_seconds}"));
-        }
-        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
-            label_parts.push(metrics_label);
-        }
+        let label_parts = self.label_parts_with_localizer(crate::i18n::global());
         if label_parts.is_empty() {
             Vec::new()
         } else {
