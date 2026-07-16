@@ -3,20 +3,21 @@ use pretty_assertions::assert_eq;
 use serde_json::Value;
 
 use super::Localizer;
-use super::ZH_CN_FTL;
+use super::ZH_HANS_FTL;
 use super::normalized_language;
 use super::self_check_json;
 
 #[test]
 fn language_aliases_are_normalized() {
-    assert_eq!(normalized_language("zh-cn"), Some("zh-CN"));
+    assert_eq!(normalized_language("zh-cn"), Some("zh-Hans"));
+    assert_eq!(normalized_language("zh-Hans"), Some("zh-Hans"));
     assert_eq!(normalized_language("English"), Some("en"));
     assert_eq!(normalized_language("fr-FR"), None);
 }
 
 #[test]
 fn static_message_uses_fluent_translation() {
-    let localizer = Localizer::from_ftl("zh-CN", ZH_CN_FTL);
+    let localizer = Localizer::from_ftl("zh-Hans", ZH_HANS_FTL);
 
     assert_eq!(
         localizer.text("status-line-configure-title", None, || {
@@ -28,7 +29,7 @@ fn static_message_uses_fluent_translation() {
 
 #[test]
 fn duration_argument_is_formatted() {
-    let localizer = Localizer::from_ftl("zh-CN", ZH_CN_FTL);
+    let localizer = Localizer::from_ftl("zh-Hans", ZH_HANS_FTL);
     let mut args = FluentArgs::new();
     args.set("duration", "7m 57s");
 
@@ -42,7 +43,7 @@ fn duration_argument_is_formatted() {
 
 #[test]
 fn missing_message_uses_english_closure() {
-    let localizer = Localizer::from_ftl("zh-CN", ZH_CN_FTL);
+    let localizer = Localizer::from_ftl("zh-Hans", ZH_HANS_FTL);
 
     assert_eq!(
         localizer.text("i18n-missing-key", None, || {
@@ -54,7 +55,7 @@ fn missing_message_uses_english_closure() {
 
 #[test]
 fn whitespace_only_message_uses_english_closure() {
-    let localizer = Localizer::from_ftl("zh-CN", r#"probe-empty = { "   " }"#);
+    let localizer = Localizer::from_ftl("zh-Hans", r#"probe-empty = { "   " }"#);
 
     assert_eq!(
         localizer.text("probe-empty", None, || "English fallback".to_string()),
@@ -65,7 +66,7 @@ fn whitespace_only_message_uses_english_closure() {
 #[test]
 fn malformed_resource_disables_the_whole_localizer() {
     let localizer = Localizer::from_ftl(
-        "zh-CN",
+        "zh-Hans",
         "status-line-configure-title = 配置状态栏\nbroken = {",
     );
 
@@ -79,7 +80,7 @@ fn malformed_resource_disables_the_whole_localizer() {
 
 #[test]
 fn missing_fluent_argument_uses_english_closure() {
-    let localizer = Localizer::from_ftl("zh-CN", ZH_CN_FTL);
+    let localizer = Localizer::from_ftl("zh-Hans", ZH_HANS_FTL);
 
     assert_eq!(
         localizer.text("history-worked-for", None, || {
@@ -91,7 +92,7 @@ fn missing_fluent_argument_uses_english_closure() {
 
 #[test]
 fn invalid_locale_disables_the_whole_localizer() {
-    let localizer = Localizer::from_ftl("not a locale", ZH_CN_FTL);
+    let localizer = Localizer::from_ftl("not a locale", ZH_HANS_FTL);
 
     assert_eq!(
         localizer.text("status-line-configure-title", None, || {
@@ -103,12 +104,12 @@ fn invalid_locale_disables_the_whole_localizer() {
 
 #[test]
 fn self_check_includes_catalog_messages_and_missing_key_fallback() {
-    let localizer = Localizer::from_ftl("zh-CN", ZH_CN_FTL);
+    let localizer = Localizer::from_ftl("zh-Hans", ZH_HANS_FTL);
     let payload: Value = serde_json::from_str(&self_check_json(&localizer)).expect("valid JSON");
 
     assert_eq!(payload["schemaVersion"], 1);
     assert_eq!(payload["active"], true);
-    assert_eq!(payload["locale"], "zh-CN");
+    assert_eq!(payload["locale"], "zh-Hans");
     assert_eq!(
         payload["messages"]["tui.status-line.setup.configure-title"],
         "配置状态栏"
