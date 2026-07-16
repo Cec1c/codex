@@ -125,6 +125,7 @@ mod goal_display;
 mod goal_files;
 mod history_cell;
 mod hooks_rpc;
+mod i18n;
 mod ide_context;
 pub(crate) mod insert_history;
 pub use insert_history::insert_history_lines;
@@ -218,6 +219,10 @@ use crate::tui::Tui;
 pub use cli::Cli;
 use codex_arg0::Arg0DispatchPaths;
 pub use markdown_render::render_markdown_text;
+
+pub fn ultra_i18n_self_check_json() -> String {
+    i18n::self_check_json(i18n::global())
+}
 pub use public_widgets::composer_input::ComposerAction;
 pub use public_widgets::composer_input::ComposerInput;
 // (tests access modules directly within the crate)
