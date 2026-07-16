@@ -20,9 +20,9 @@ Because the contribution guide does not allow me to submit a PR directly, after 
 
 BTW, the Codex CLI interface is really a little plain. This is also a direction that I want my plugin to improve.
 
--主界面截图.png
+![Codex CLI main interface](https://raw.githubusercontent.com/Cec1c/codex/main/docs/i18n/assets/%E4%B8%BB%E7%95%8C%E9%9D%A2%E6%88%AA%E5%9B%BE.png)
 
--status.png
+![Localized status page](https://raw.githubusercontent.com/Cec1c/codex/main/docs/i18n/assets/status.png)
 
 I may let Codex explain some of the following technical details directly:
 
@@ -148,7 +148,7 @@ $CODEX_HOME/ui-language
 
 Changing the persistent language currently requires restarting Codex. Developers can also use `CODEX_UI_LANGUAGE=zh-Hans` to test Chinese for one process.
 
--language.png
+![Language command](https://raw.githubusercontent.com/Cec1c/codex/main/docs/i18n/assets/language.png)
 
 (My plan is to make it selectable in a plugin-store-like form. This part of the work has not started yet.)
 
@@ -178,9 +178,9 @@ https://github.com/Cec1c/codex
 
 btw，codex cli的界面实在有点素，这也是我插件想优化的方向
 
--主界面截图.png
+![Codex CLI 中文主界面](https://raw.githubusercontent.com/Cec1c/codex/main/docs/i18n/assets/%E4%B8%BB%E7%95%8C%E9%9D%A2%E6%88%AA%E5%9B%BE.png)
 
--status.png
+![中文状态页面](https://raw.githubusercontent.com/Cec1c/codex/main/docs/i18n/assets/status.png)
 
 接下来一部分技术细节我可能直接让codex给我说明了：
 
@@ -306,7 +306,7 @@ $CODEX_HOME/ui-language
 
 修改持久化语言后，目前需要重启 Codex。开发者也可以使用 `CODEX_UI_LANGUAGE=zh-Hans` 只为当前进程测试中文。
 
--language.png
+![语言入口](https://raw.githubusercontent.com/Cec1c/codex/main/docs/i18n/assets/language.png)
 
 （我计划是能做成插件商店那种可选择的形式，这部分工作还没展开）
 
