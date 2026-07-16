@@ -68,6 +68,10 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 
+fn approval_text(key: &str, english: &str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 /// Request coming from the agent that needs user approval.
 #[derive(Clone, Debug)]
 pub(crate) enum ApprovalRequest {
@@ -258,7 +262,12 @@ impl ApprovalOverlay {
                     approval_keymap,
                 ),
                 request.network_approval_context.as_ref().map_or_else(
-                    || "Would you like to run the following command?".to_string(),
+                    || {
+                        approval_text(
+                            "approval-run-command-title",
+                            "Would you like to run the following command?",
+                        )
+                    },
                     |network_approval_context| {
                         format!(
                             "Do you want to approve network access to \"{}\"?",
@@ -269,11 +278,17 @@ impl ApprovalOverlay {
             ),
             ApprovalRequest::Permissions(_) => (
                 permissions_options(approval_keymap),
-                "Would you like to grant these permissions?".to_string(),
+                approval_text(
+                    "approval-grant-permissions-title",
+                    "Would you like to grant these permissions?",
+                ),
             ),
             ApprovalRequest::ApplyPatch(_) => (
                 patch_options(approval_keymap),
-                "Would you like to make the following edits?".to_string(),
+                approval_text(
+                    "approval-apply-patch-title",
+                    "Would you like to make the following edits?",
+                ),
             ),
             ApprovalRequest::McpElicitation(request) => (
                 elicitation_options(approval_keymap),
@@ -835,9 +850,9 @@ fn exec_options(
         .filter_map(|decision| match decision {
             CommandExecutionApprovalDecision::Accept => Some(ApprovalOption {
                 label: if network_approval_context.is_some() {
-                    "Yes, just this once".to_string()
+                    approval_text("approval-yes-once", "Yes, just this once")
                 } else {
-                    "Yes, proceed".to_string()
+                    approval_text("approval-yes-proceed", "Yes, proceed")
                 },
                 decision: ApprovalDecision::Command(CommandExecutionApprovalDecision::Accept),
                 shortcuts: keymap.approve.clone(),
@@ -864,11 +879,20 @@ fn exec_options(
             }
             CommandExecutionApprovalDecision::AcceptForSession => Some(ApprovalOption {
                 label: if network_approval_context.is_some() {
-                    "Yes, and allow this host for this conversation".to_string()
+                    approval_text(
+                        "approval-allow-host-conversation",
+                        "Yes, and allow this host for this conversation",
+                    )
                 } else if additional_permissions.is_some() {
-                    "Yes, and allow these permissions for this session".to_string()
+                    approval_text(
+                        "approval-allow-permissions-session",
+                        "Yes, and allow these permissions for this session",
+                    )
                 } else {
-                    "Yes, and don't ask again for this command in this session".to_string()
+                    approval_text(
+                        "approval-allow-command-session",
+                        "Yes, and don't ask again for this command in this session",
+                    )
                 },
                 decision: ApprovalDecision::Command(
                     CommandExecutionApprovalDecision::AcceptForSession,
@@ -880,11 +904,17 @@ fn exec_options(
             } => {
                 let (label, shortcuts) = match network_policy_amendment.action {
                     NetworkPolicyRuleAction::Allow => (
-                        "Yes, and allow this host in the future".to_string(),
+                        approval_text(
+                            "approval-allow-host-future",
+                            "Yes, and allow this host in the future",
+                        ),
                         keymap.approve_for_prefix.clone(),
                     ),
                     NetworkPolicyRuleAction::Deny => (
-                        "No, and block this host in the future".to_string(),
+                        approval_text(
+                            "approval-block-host-future",
+                            "No, and block this host in the future",
+                        ),
                         keymap.deny.clone(),
                     ),
                 };
@@ -899,12 +929,18 @@ fn exec_options(
                 })
             }
             CommandExecutionApprovalDecision::Decline => Some(ApprovalOption {
-                label: "No, continue without running it".to_string(),
+                label: approval_text(
+                    "approval-decline-command",
+                    "No, continue without running it",
+                ),
                 decision: ApprovalDecision::Command(CommandExecutionApprovalDecision::Decline),
                 shortcuts: keymap.deny.clone(),
             }),
             CommandExecutionApprovalDecision::Cancel => Some(ApprovalOption {
-                label: "No, and tell Codex what to do differently".to_string(),
+                label: approval_text(
+                    "approval-tell-codex",
+                    "No, and tell Codex what to do differently",
+                ),
                 decision: ApprovalDecision::Command(CommandExecutionApprovalDecision::Cancel),
                 shortcuts: keymap.decline.clone(),
             }),
@@ -1010,17 +1046,23 @@ fn path_label(base: &str, subpath: &Option<LegacyAppPathString>) -> String {
 fn patch_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
     vec![
         ApprovalOption {
-            label: "Yes, proceed".to_string(),
+            label: approval_text("approval-yes-proceed", "Yes, proceed"),
             decision: ApprovalDecision::FileChange(FileChangeApprovalDecision::Accept),
             shortcuts: keymap.approve.clone(),
         },
         ApprovalOption {
-            label: "Yes, and don't ask again for these files".to_string(),
+            label: approval_text(
+                "approval-allow-files-session",
+                "Yes, and don't ask again for these files",
+            ),
             decision: ApprovalDecision::FileChange(FileChangeApprovalDecision::AcceptForSession),
             shortcuts: keymap.approve_for_session.clone(),
         },
         ApprovalOption {
-            label: "No, and tell Codex what to do differently".to_string(),
+            label: approval_text(
+                "approval-tell-codex",
+                "No, and tell Codex what to do differently",
+            ),
             decision: ApprovalDecision::FileChange(FileChangeApprovalDecision::Cancel),
             shortcuts: keymap.decline.clone(),
         },
@@ -1037,24 +1079,36 @@ fn permissions_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
 
     vec![
         ApprovalOption {
-            label: "Yes, grant these permissions for this turn".to_string(),
+            label: approval_text(
+                "approval-grant-permissions-turn",
+                "Yes, grant these permissions for this turn",
+            ),
             decision: ApprovalDecision::Permissions(PermissionsDecision::GrantForTurn),
             shortcuts: keymap.approve.clone(),
         },
         ApprovalOption {
-            label: "Yes, grant for this turn with strict auto review".to_string(),
+            label: approval_text(
+                "approval-grant-strict-review-turn",
+                "Yes, grant for this turn with strict auto review",
+            ),
             decision: ApprovalDecision::Permissions(
                 PermissionsDecision::GrantForTurnWithStrictAutoReview,
             ),
             shortcuts: vec![key_hint::plain(KeyCode::Char('r'))],
         },
         ApprovalOption {
-            label: "Yes, grant these permissions for this session".to_string(),
+            label: approval_text(
+                "approval-grant-permissions-session",
+                "Yes, grant these permissions for this session",
+            ),
             decision: ApprovalDecision::Permissions(PermissionsDecision::GrantForSession),
             shortcuts: keymap.approve_for_session.clone(),
         },
         ApprovalOption {
-            label: "No, continue without permissions".to_string(),
+            label: approval_text(
+                "approval-continue-without-permissions",
+                "No, continue without permissions",
+            ),
             decision: ApprovalDecision::Permissions(PermissionsDecision::Deny),
             shortcuts: deny_shortcuts,
         },
@@ -1085,17 +1139,23 @@ fn elicitation_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
 
     vec![
         ApprovalOption {
-            label: "Yes, provide the requested info".to_string(),
+            label: approval_text(
+                "approval-provide-requested-info",
+                "Yes, provide the requested info",
+            ),
             decision: ApprovalDecision::McpElicitation(McpServerElicitationAction::Accept),
             shortcuts: keymap.approve.clone(),
         },
         ApprovalOption {
-            label: "No, but continue without it".to_string(),
+            label: approval_text(
+                "approval-continue-without-info",
+                "No, but continue without it",
+            ),
             decision: ApprovalDecision::McpElicitation(McpServerElicitationAction::Decline),
             shortcuts: decline_shortcuts,
         },
         ApprovalOption {
-            label: "Cancel this request".to_string(),
+            label: approval_text("approval-cancel-request", "Cancel this request"),
             decision: ApprovalDecision::McpElicitation(McpServerElicitationAction::Cancel),
             shortcuts: cancel_shortcuts,
         },

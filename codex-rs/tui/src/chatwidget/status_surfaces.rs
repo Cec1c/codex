@@ -690,15 +690,34 @@ impl ChatWidget {
                 if total <= 0 {
                     None
                 } else {
-                    Some(format!("{} used", format_tokens_compact(total)))
+                    let tokens = format_tokens_compact(total);
+                    Some(crate::i18n::global().text_with_string_arg(
+                        "status-line-tokens-used",
+                        "tokens",
+                        tokens.as_str(),
+                        || format!("{tokens} used"),
+                    ))
                 }
             }
-            StatusLineItem::ContextRemaining => self
-                .status_line_context_remaining_percent()
-                .map(|remaining| format!("Context {remaining}% left")),
-            StatusLineItem::ContextUsed => self
-                .status_line_context_used_percent()
-                .map(|used| format!("Context {used}% used")),
+            StatusLineItem::ContextRemaining => {
+                self.status_line_context_remaining_percent()
+                    .map(|remaining| {
+                        crate::i18n::global().text_with_string_arg(
+                            "status-line-context-remaining",
+                            "percent",
+                            remaining.to_string(),
+                            || format!("Context {remaining}% left"),
+                        )
+                    })
+            }
+            StatusLineItem::ContextUsed => self.status_line_context_used_percent().map(|used| {
+                crate::i18n::global().text_with_string_arg(
+                    "status-line-context-used",
+                    "percent",
+                    used.to_string(),
+                    || format!("Context {used}% used"),
+                )
+            }),
             StatusLineItem::FiveHourLimit => {
                 let (window, is_secondary) = self
                     .rate_limit_snapshots_by_limit_id

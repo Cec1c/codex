@@ -84,7 +84,7 @@ pub(crate) fn get_tooltip(plan: Option<PlanType>, fast_mode_enabled: bool) -> Op
         }
     }
 
-    pick_tooltip(&mut rng).map(str::to_string)
+    pick_tooltip(&mut rng).map(localize_tooltip)
 }
 
 fn paid_app_tooltip() -> Option<&'static str> {
@@ -117,6 +117,16 @@ fn pick_tooltip<R: Rng + ?Sized>(rng: &mut R) -> Option<&'static str> {
         ALL_TOOLTIPS
             .get(rng.random_range(0..ALL_TOOLTIPS.len()))
             .copied()
+    }
+}
+
+fn localize_tooltip(tip: &str) -> String {
+    match tip {
+        "Use /rename to rename your threads for easier thread resuming." => crate::i18n::global()
+            .text("tooltip-rename-threads", None, || {
+                "Use /rename to rename your threads for easier thread resuming.".to_string()
+            }),
+        _ => tip.to_string(),
     }
 }
 

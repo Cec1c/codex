@@ -1949,21 +1949,39 @@ impl Drop for ChatWidget {
     }
 }
 
-const PLACEHOLDERS: [&str; 8] = [
-    "Explain this codebase",
-    "Summarize recent commits",
-    "Implement {feature}",
-    "Find and fix a bug in @filename",
-    "Write tests for @filename",
-    "Improve documentation in @filename",
-    "Run /review on my current changes",
-    "Use /skills to list available skills",
+const PLACEHOLDERS: [(&str, &str); 8] = [
+    ("composer-explain-codebase", "Explain this codebase"),
+    ("composer-summarize-commits", "Summarize recent commits"),
+    ("composer-implement-feature", "Implement {feature}"),
+    ("composer-fix-file-bug", "Find and fix a bug in @filename"),
+    ("composer-write-file-tests", "Write tests for @filename"),
+    (
+        "composer-improve-file-docs",
+        "Improve documentation in @filename",
+    ),
+    (
+        "composer-review-current-changes",
+        "Run /review on my current changes",
+    ),
+    (
+        "composer-list-skills",
+        "Use /skills to list available skills",
+    ),
 ];
 
-const SIDE_PLACEHOLDERS: [&str; 3] = [
-    "Check recently modified functions for compatibility",
-    "How many files have been modified?",
-    "Will this algorithm scale well?",
+const SIDE_PLACEHOLDERS: [(&str, &str); 3] = [
+    (
+        "composer-side-check-compatibility",
+        "Check recently modified functions for compatibility",
+    ),
+    (
+        "composer-side-count-modified-files",
+        "How many files have been modified?",
+    ),
+    (
+        "composer-side-check-scale",
+        "Will this algorithm scale well?",
+    ),
 ];
 
 // Extract the first bold (Markdown) element in the form **...** from `s`.
