@@ -152,6 +152,6 @@ history-worked-for = 工作了 { $duration }
 
 # Language selection
 language-current = 当前语言：{ $locale }
-language-help = 使用 /language zh-CN 或 /language en 选择语言；重启 Codex 后生效。
+language-help = 使用 /language zh-Hans 或 /language en 选择语言；重启 Codex 后生效。
 language-saved = 已选择 { $locale }；重启 Codex 后生效。
-language-unsupported = 不支持语言 { $locale }。可用选项：zh-CN、en。
+language-unsupported = 不支持语言 { $locale }。可用选项：zh-Hans、en。
