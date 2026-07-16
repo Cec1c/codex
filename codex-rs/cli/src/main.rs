@@ -955,8 +955,8 @@ fn stage_str(stage: Stage) -> &'static str {
 
 fn main() -> anyhow::Result<()> {
     let args = std::env::args_os().collect::<Vec<_>>();
-    if args.len() == 2 && args[1].as_os_str() == std::ffi::OsStr::new("--ultra-i18n-self-check") {
-        println!("{}", codex_tui::ultra_i18n_self_check_json());
+    if args.len() == 2 && args[1].as_os_str() == std::ffi::OsStr::new("--i18n-self-check") {
+        println!("{}", codex_tui::i18n_self_check_json());
         return Ok(());
     }
 

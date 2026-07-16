@@ -2,6 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use codex_utils_home_dir::find_codex_home;
 use fluent_bundle::FluentArgs;
 use fluent_bundle::FluentResource;
 use fluent_bundle::concurrent::FluentBundle;
@@ -12,6 +13,9 @@ use strum::IntoEnumIterator;
 use unic_langid::LanguageIdentifier;
 
 use crate::slash_command::SlashCommand;
+
+const ZH_CN_FTL: &str = include_str!("../i18n/zh-CN.ftl");
+const UI_LANGUAGE_FILE: &str = "ui-language";
 
 #[cfg(test)]
 #[path = "i18n_tests.rs"]
@@ -48,28 +52,20 @@ impl Localizer {
         }
     }
 
-    pub(crate) fn from_environment() -> Self {
-        let Ok(available_locale) = std::env::var("CODEX_ULTRA_LOCALE") else {
-            return Self::english();
-        };
-        let requested_locale = language_preference_path()
-            .and_then(|path| fs::read_to_string(path).ok())
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| available_locale.clone());
-        if matches!(requested_locale.as_str(), "en" | "en-US") {
-            return Self::english();
+    pub(crate) fn from_runtime() -> Self {
+        let requested_locale = std::env::var("CODEX_UI_LANGUAGE")
+            .ok()
+            .or_else(|| {
+                language_preference_path()
+                    .and_then(|path| fs::read_to_string(path).ok())
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+            })
+            .unwrap_or_else(|| "en".to_string());
+        match normalized_language(&requested_locale) {
+            Some("zh-CN") => Self::from_ftl("zh-CN", ZH_CN_FTL),
+            _ => Self::english(),
         }
-        if requested_locale != available_locale {
-            return Self::english();
-        }
-        let Some(path) = std::env::var_os("CODEX_ULTRA_FTL_PATH") else {
-            return Self::english();
-        };
-        let Ok(source) = fs::read_to_string(PathBuf::from(path)) else {
-            return Self::english();
-        };
-        Self::from_ftl(&available_locale, &source)
     }
 
     pub(crate) fn text<F>(&self, key: &str, args: Option<&FluentArgs>, english: F) -> String
@@ -110,7 +106,9 @@ impl Localizer {
 }
 
 fn language_preference_path() -> Option<PathBuf> {
-    std::env::var_os("CODEX_ULTRA_LANGUAGE_PREFERENCE_PATH").map(PathBuf::from)
+    find_codex_home()
+        .ok()
+        .map(|codex_home| codex_home.join(UI_LANGUAGE_FILE).to_path_buf())
 }
 
 fn normalized_language(input: &str) -> Option<&'static str> {
@@ -153,10 +151,7 @@ pub(crate) fn save_language_preference(input: &str) -> Result<String, String> {
         }));
     };
     let Some(path) = language_preference_path() else {
-        return Err(
-            "Language selection is unavailable in this launch; start Codex through Codex Ultra."
-                .to_string(),
-        );
+        return Err("Could not resolve CODEX_HOME for the language preference.".to_string());
     };
     fs::write(path, format!("{locale}\n"))
         .map_err(|error| format!("Could not save language preference: {error}"))?;
@@ -175,7 +170,7 @@ impl Default for Localizer {
 
 pub(crate) fn global() -> &'static Localizer {
     static LOCALIZER: OnceLock<Localizer> = OnceLock::new();
-    LOCALIZER.get_or_init(Localizer::from_environment)
+    LOCALIZER.get_or_init(Localizer::from_runtime)
 }
 
 pub(super) fn self_check_json(localizer: &Localizer) -> String {
@@ -630,10 +625,8 @@ pub(super) fn self_check_json(localizer: &Localizer) -> String {
         ),
     );
     messages.insert(
-        "ultra.i18n.missing-key".to_string(),
-        Value::String(localizer.text("ultra-i18n-missing-key", None, || {
-            "English fallback".to_string()
-        })),
+        "i18n.missing-key".to_string(),
+        Value::String(localizer.text("i18n-missing-key", None, || "English fallback".to_string())),
     );
 
     json!({
