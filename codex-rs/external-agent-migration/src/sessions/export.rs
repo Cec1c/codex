@@ -1,7 +1,7 @@
 use super::ConversationMessage;
 use super::ImportedExternalAgentSession;
 use super::MessageRole;
-use super::records::read_session_import;
+use super::records::read_session_import_with_cwd;
 use super::summarize_for_label;
 use super::title::IMPORTED_SESSION_FALLBACK_TITLE;
 use super::title::SessionTitleCandidates;
@@ -18,6 +18,7 @@ use codex_protocol::protocol::TurnCompleteEvent;
 use codex_protocol::protocol::TurnStartedEvent;
 use codex_protocol::protocol::UserMessageEvent;
 use codex_utils_output_truncation::approx_tokens_from_byte_count_i64;
+use std::collections::BTreeSet;
 use std::io;
 use std::path::Path;
 
@@ -26,18 +27,20 @@ const EXTERNAL_SESSION_IMPORTED_MARKER: &str = "<EXTERNAL SESSION IMPORTED>";
 #[cfg(test)]
 fn load_session_for_import(path: &Path) -> io::Result<Option<ImportedExternalAgentSession>> {
     Ok(
-        load_session_for_import_with_content_sha256(path)?
-            .map(|(session, _content_sha256)| session),
+        load_session_for_import_with_content_sha256(path, /*fallback_cwd*/ None)?
+            .map(|(session, _content_sha256, _attributed_mcp_server_ids)| session),
     )
 }
 
 pub(crate) fn load_session_for_import_with_content_sha256(
     path: &Path,
-) -> io::Result<Option<(ImportedExternalAgentSession, String)>> {
-    let parsed = read_session_import(path)?;
+    fallback_cwd: Option<&Path>,
+) -> io::Result<Option<(ImportedExternalAgentSession, String, BTreeSet<String>)>> {
+    let parsed = read_session_import_with_cwd(path, fallback_cwd)?;
     let Some(cwd) = parsed.cwd else {
         return Ok(None);
     };
+    let attributed_mcp_server_ids = parsed.attributed_mcp_server_ids;
     let messages = parsed.messages;
     let first_user_message_text = messages
         .iter()
@@ -67,6 +70,7 @@ pub(crate) fn load_session_for_import_with_content_sha256(
             rollout_items,
         },
         parsed.content_sha256,
+        attributed_mcp_server_ids,
     )))
 }
 

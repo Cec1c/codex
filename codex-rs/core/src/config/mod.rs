@@ -173,8 +173,6 @@ use permission_profile_catalog::permission_profile_catalog_from_permissions;
 use permission_profile_catalog::permission_profile_is_allowed;
 use permission_profile_catalog::validate_permission_profile_for_deny_read;
 pub(crate) use permissions::is_builtin_permission_profile_name;
-pub(crate) use permissions::reject_unknown_builtin_permission_profile;
-pub(crate) use permissions::resolve_permission_profile;
 pub use resolved_permission_profile::PermissionProfileSnapshot;
 pub(crate) use resolved_permission_profile::PermissionProfileState;
 
@@ -599,56 +597,6 @@ fn build_network_proxy_spec(
     } else {
         network.enabled().then_some(network)
     })
-}
-
-pub fn validate_windows_sandbox_network_proxy_compatibility(
-    windows_sandbox_level: WindowsSandboxLevel,
-    network_proxy_configured: bool,
-) -> std::io::Result<()> {
-    validate_windows_sandbox_network_proxy_compatibility_for_platform(
-        cfg!(target_os = "windows"),
-        windows_sandbox_level,
-        network_proxy_configured,
-    )
-}
-
-fn validate_windows_sandbox_network_proxy_compatibility_for_platform(
-    is_windows: bool,
-    windows_sandbox_level: WindowsSandboxLevel,
-    network_proxy_configured: bool,
-) -> std::io::Result<()> {
-    if is_windows
-        && network_proxy_configured
-        && windows_sandbox_level != WindowsSandboxLevel::Elevated
-    {
-        return Err(ConstraintError::NetworkProxyIncompatibleWithUnelevatedWindowsSandbox.into());
-    }
-    Ok(())
-}
-
-fn validate_windows_network_proxy_requirements(
-    requirements: &ConfigRequirementsToml,
-    network_proxy_configured: bool,
-) -> std::io::Result<()> {
-    validate_windows_network_proxy_requirements_for_platform(
-        cfg!(target_os = "windows"),
-        requirements,
-        network_proxy_configured,
-    )
-}
-
-fn validate_windows_network_proxy_requirements_for_platform(
-    is_windows: bool,
-    requirements: &ConfigRequirementsToml,
-    network_proxy_configured: bool,
-) -> std::io::Result<()> {
-    if is_windows
-        && network_proxy_configured
-        && !requirements.allows_only_elevated_windows_sandbox()
-    {
-        return Err(ConstraintError::NetworkProxyRequiresElevatedWindowsSandboxRequirement.into());
-    }
-    Ok(())
 }
 
 /// Configured thread persistence backend.
@@ -1295,12 +1243,6 @@ impl AuthManagerConfig for Config {
     }
 }
 
-#[derive(Clone, Copy)]
-enum ConfigBuildPhase {
-    CloudConfigBootstrap,
-    Authoritative,
-}
-
 #[derive(Clone, Default)]
 pub struct ConfigBuilder {
     codex_home: Option<PathBuf>,
@@ -1359,15 +1301,10 @@ impl ConfigBuilder {
 
     pub async fn build(self) -> std::io::Result<Config> {
         // Keep the large config-loading future off small runtime thread stacks.
-        Box::pin(self.build_inner(ConfigBuildPhase::Authoritative)).await
+        Box::pin(self.build_inner()).await
     }
 
-    /// Builds the preliminary config needed to initialize cloud config loading.
-    pub async fn build_for_cloud_config_bootstrap(self) -> std::io::Result<Config> {
-        Box::pin(self.build_inner(ConfigBuildPhase::CloudConfigBootstrap)).await
-    }
-
-    async fn build_inner(self, build_phase: ConfigBuildPhase) -> std::io::Result<Config> {
+    async fn build_inner(self) -> std::io::Result<Config> {
         let Self {
             codex_home,
             cli_overrides,
@@ -1452,13 +1389,12 @@ impl ConfigBuilder {
                 config_layer_stack.requirements().clone(),
                 config_layer_stack.requirements_toml().clone(),
             )?;
-            let mut config = Config::load_config_with_layer_stack_and_options(
+            let mut config = Config::load_config_with_layer_stack(
                 LOCAL_FS.as_ref(),
                 lock_config_toml,
                 harness_overrides,
                 codex_home,
                 lock_config_layer_stack,
-                build_phase,
             )
             .await?;
             config.config_lock_toml = Some(Arc::new(expected_lock_config));
@@ -1467,13 +1403,12 @@ impl ConfigBuilder {
                 save_fields_resolved_from_model_catalog;
             return Ok(config);
         }
-        Config::load_config_with_layer_stack_and_options(
+        Config::load_config_with_layer_stack(
             LOCAL_FS.as_ref(),
             config_toml,
             harness_overrides,
             codex_home,
             config_layer_stack,
-            build_phase,
         )
         .await
     }
@@ -3080,25 +3015,6 @@ impl Config {
         codex_home: AbsolutePathBuf,
         config_layer_stack: ConfigLayerStack,
     ) -> std::io::Result<Self> {
-        Self::load_config_with_layer_stack_and_options(
-            fs,
-            cfg,
-            overrides,
-            codex_home,
-            config_layer_stack,
-            ConfigBuildPhase::Authoritative,
-        )
-        .await
-    }
-
-    async fn load_config_with_layer_stack_and_options(
-        fs: &dyn ExecutorFileSystem,
-        cfg: ConfigToml,
-        overrides: ConfigOverrides,
-        codex_home: AbsolutePathBuf,
-        config_layer_stack: ConfigLayerStack,
-        build_phase: ConfigBuildPhase,
-    ) -> std::io::Result<Self> {
         // Keep the large config-construction future off small test thread stacks.
         Box::pin(async move {
         if cfg.experimental_thread_store_endpoint.is_some() {
@@ -3895,17 +3811,6 @@ impl Config {
             network_requirements,
             &network_permission_profile,
         )?;
-        if matches!(build_phase, ConfigBuildPhase::Authoritative) {
-            let network_proxy_enabled = network.as_ref().is_some_and(NetworkProxySpec::enabled);
-            validate_windows_network_proxy_requirements(
-                config_layer_stack.requirements_toml(),
-                network_proxy_enabled,
-            )?;
-            validate_windows_sandbox_network_proxy_compatibility(
-                windows_sandbox_level,
-                network_proxy_enabled,
-            )?;
-        }
         let mut helper_readable_roots = get_readable_roots_required_for_codex_runtime(
             &codex_home,
             zsh_path.as_ref(),
@@ -4299,21 +4204,11 @@ impl Config {
             NetworkProxyConfig::default()
         };
 
-        let network = build_network_proxy_spec(
+        build_network_proxy_spec(
             configured_network_proxy_config,
             self.config_layer_stack.requirements().network.clone(),
             permission_profile,
-        )?;
-        let network_proxy_enabled = network.as_ref().is_some_and(NetworkProxySpec::enabled);
-        validate_windows_network_proxy_requirements(
-            self.config_layer_stack.requirements_toml(),
-            network_proxy_enabled,
-        )?;
-        validate_windows_sandbox_network_proxy_compatibility(
-            WindowsSandboxLevel::from_config(self),
-            network_proxy_enabled,
-        )?;
-        Ok(network)
+        )
     }
 
     pub fn bundled_skills_enabled(&self) -> bool {
