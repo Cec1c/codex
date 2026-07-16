@@ -698,9 +698,9 @@ mod tests {
     }
 
     #[test]
-    fn setup_view_snapshot_uses_zh_cn_localizer() {
+    fn setup_view_snapshot_uses_zh_hans_localizer() {
         let localizer = crate::i18n::Localizer::from_ftl(
-            "zh-CN",
+            "zh-Hans",
             concat!(
                 "status-line-use-theme-colors = 使用主题颜色\n",
                 "status-line-apply-theme-colors = 应用当前 /theme 的颜色\n",
@@ -723,15 +723,15 @@ mod tests {
         );
 
         assert_snapshot!(
-            "status_line_setup_zh_cn_narrow",
+            "status_line_setup_zh_hans_narrow",
             render_lines(&view, /*width*/ 32)
         );
         assert_snapshot!(
-            "status_line_setup_zh_cn_medium",
+            "status_line_setup_zh_hans_medium",
             render_lines(&view, /*width*/ 72)
         );
         assert_snapshot!(
-            "status_line_setup_zh_cn_wide",
+            "status_line_setup_zh_hans_wide",
             render_lines(&view, /*width*/ 120)
         );
     }

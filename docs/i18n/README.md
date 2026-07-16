@@ -13,7 +13,7 @@ The current prototype includes:
 - a process-wide `Localizer` backed by Mozilla Fluent;
 - compiled English call-site fallbacks;
 - a built-in Simplified Chinese resource;
-- `/language`, `/language zh-CN`, and `/language en`;
+- `/language`, `/language zh-Hans`, and `/language en`;
 - localized session cards, status surfaces, slash-command descriptions, composer placeholders, approvals, onboarding, MCP startup prefixes, and common errors;
 - a hidden self-check used by automated tests.
 
@@ -41,7 +41,7 @@ No Ultra launcher or external FTL path is required.
 English is the default. To enable Simplified Chinese, run this inside the TUI:
 
 ```text
-/language zh-CN
+/language zh-Hans
 ```
 
 Restart Codex after changing the language. To return to English:
@@ -50,7 +50,7 @@ Restart Codex after changing the language. To return to English:
 /language en
 ```
 
-The preference is stored in `$CODEX_HOME/ui-language`. For a temporary one-process override, developers can set `CODEX_UI_LANGUAGE=zh-CN` before starting Codex.
+The preference is stored in `$CODEX_HOME/ui-language`. For a temporary one-process override, developers can set `CODEX_UI_LANGUAGE=zh-Hans` before starting Codex. The aliases `zh`, `zh-CN`, and `chinese` are accepted and normalized to `zh-Hans`.
 
 ## Architecture
 
@@ -60,7 +60,7 @@ The preference is stored in `$CODEX_HOME/ui-language`. For a temporary one-proce
              v
       process-wide Localizer
              |
-             +-- built-in zh-CN.ftl
+             +-- built-in zh-Hans.ftl
              |
              +-- Fluent arguments
              |
@@ -110,7 +110,7 @@ The localization layer must never return a raw message key, a partially formatte
 ```text
 codex-rs/tui/src/i18n.rs
 codex-rs/tui/src/i18n_tests.rs
-codex-rs/tui/i18n/zh-CN.ftl
+codex-rs/tui/i18n/zh-Hans.ftl
 ```
 
 English remains compiled at each call site, so an English FTL file is not required for safe operation. Additional built-in or external language packs can be added later without changing the fallback contract.
@@ -139,7 +139,7 @@ Keep the capture instructions below after adding the media. Place files under [`
 ### 2. `/language` workflow
 
 > **Expected file:** `assets/02-language-command.gif`  
-> Capture `/language`, `/language zh-CN`, the restart notice, and a restarted Chinese session. A second short sequence may show `/language en` returning the UI to English.
+> Capture `/language`, `/language zh-Hans`, the restart notice, and a restarted Chinese session. A second short sequence may show `/language en` returning the UI to English.
 
 <!-- Media slot: 02-language-command.gif. Add the image here after the file is available. -->
 
@@ -191,7 +191,7 @@ Installer, updater, compatibility, and release-management code from Codex CLI Ul
 - 进程级全局 `Localizer`；
 - 编译进调用点的英文回退；
 - 内置简体中文 FTL；
-- `/language`、`/language zh-CN` 和 `/language en`；
+- `/language`、`/language zh-Hans` 和 `/language en`；
 - 启动卡片、状态栏、斜杠命令、输入占位、审批、登录引导、MCP 启动前缀和常用错误提示；
 - 供自动化测试使用的隐藏自检入口。
 
@@ -209,7 +209,7 @@ cargo build -p codex-cli --locked
 界面默认使用英文。在 TUI 中输入以下命令启用简体中文：
 
 ```text
-/language zh-CN
+/language zh-Hans
 ```
 
 重启 Codex 后生效。恢复英文：
@@ -218,7 +218,7 @@ cargo build -p codex-cli --locked
 /language en
 ```
 
-语言偏好保存在 `$CODEX_HOME/ui-language`。开发者也可以在启动前设置 `CODEX_UI_LANGUAGE=zh-CN`，只覆盖当前进程。
+语言偏好保存在 `$CODEX_HOME/ui-language`。开发者也可以在启动前设置 `CODEX_UI_LANGUAGE=zh-Hans`，只覆盖当前进程。兼容输入 `zh`、`zh-CN` 和 `chinese`，并统一规范化为 `zh-Hans`。
 
 ## 核心设计
 
@@ -229,7 +229,7 @@ cargo build -p codex-cli --locked
 简体中文资源位于：
 
 ```text
-codex-rs/tui/i18n/zh-CN.ftl
+codex-rs/tui/i18n/zh-Hans.ftl
 ```
 
 ## 媒体文件说明

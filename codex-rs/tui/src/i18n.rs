@@ -14,7 +14,7 @@ use unic_langid::LanguageIdentifier;
 
 use crate::slash_command::SlashCommand;
 
-const ZH_CN_FTL: &str = include_str!("../i18n/zh-CN.ftl");
+const ZH_HANS_FTL: &str = include_str!("../i18n/zh-Hans.ftl");
 const UI_LANGUAGE_FILE: &str = "ui-language";
 
 #[cfg(test)]
@@ -63,7 +63,7 @@ impl Localizer {
             })
             .unwrap_or_else(|| "en".to_string());
         match normalized_language(&requested_locale) {
-            Some("zh-CN") => Self::from_ftl("zh-CN", ZH_CN_FTL),
+            Some("zh-Hans") => Self::from_ftl("zh-Hans", ZH_HANS_FTL),
             _ => Self::english(),
         }
     }
@@ -113,7 +113,7 @@ fn language_preference_path() -> Option<PathBuf> {
 
 fn normalized_language(input: &str) -> Option<&'static str> {
     match input.trim().to_ascii_lowercase().as_str() {
-        "zh" | "zh-cn" | "chinese" => Some("zh-CN"),
+        "zh" | "zh-cn" | "zh-hans" | "chinese" => Some("zh-Hans"),
         "en" | "en-us" | "english" => Some("en"),
         _ => None,
     }
@@ -132,7 +132,7 @@ pub(crate) fn language_status() -> (String, String) {
         format!("Current language: {locale}")
     });
     let help = localizer.text("language-help", None, || {
-        "Use /language zh-CN or /language en to choose a language; restart Codex to apply."
+        "Use /language zh-Hans or /language en to choose a language; restart Codex to apply."
             .to_string()
     });
     (current, help)
@@ -145,7 +145,7 @@ pub(crate) fn save_language_preference(input: &str) -> Result<String, String> {
         args.set("locale", input.trim());
         return Err(localizer.text("language-unsupported", Some(&args), || {
             format!(
-                "Unsupported language {}. Available options: zh-CN, en.",
+                "Unsupported language {}. Available options: zh-Hans, en.",
                 input.trim()
             )
         }));
