@@ -606,9 +606,9 @@ fn final_message_separator_includes_worked_label_after_one_minute() {
 }
 
 #[test]
-fn worked_for_uses_zh_cn_localizer() {
+fn worked_for_uses_zh_hans_localizer() {
     let localizer =
-        crate::i18n::Localizer::from_ftl("zh-CN", "history-worked-for = 工作了 { $duration }\n");
+        crate::i18n::Localizer::from_ftl("zh-Hans", "history-worked-for = 工作了 { $duration }\n");
     let separator = FinalMessageSeparator::new(Some(477), None);
 
     assert_eq!(
