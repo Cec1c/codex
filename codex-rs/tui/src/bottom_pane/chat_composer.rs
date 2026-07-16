@@ -2689,8 +2689,15 @@ impl ChatComposer {
                 .slash_input()
                 .validate_submission(&text, input_starts_with_space)
         {
-            let message = format!(
-                r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+            let message = crate::i18n::global().text_with_string_arg(
+                "slash-unrecognized-command",
+                "name",
+                name.as_str(),
+                || {
+                    format!(
+                        r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+                    )
+                },
             );
             self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
                 history_cell::new_info_event(message, /*hint*/ None),
