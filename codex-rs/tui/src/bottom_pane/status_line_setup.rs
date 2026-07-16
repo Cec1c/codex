@@ -261,11 +261,33 @@ impl StatusLineSetupView {
         app_event_tx: AppEventSender,
         list_keymap: ListKeymap,
     ) -> Self {
+        Self::new_with_localizer(
+            status_line_items,
+            use_theme_colors,
+            preview_data,
+            app_event_tx,
+            list_keymap,
+            crate::i18n::global(),
+        )
+    }
+
+    fn new_with_localizer(
+        status_line_items: Option<&[String]>,
+        use_theme_colors: bool,
+        preview_data: StatusSurfacePreviewData,
+        app_event_tx: AppEventSender,
+        list_keymap: ListKeymap,
+        localizer: &crate::i18n::Localizer,
+    ) -> Self {
         let mut used_ids = HashSet::new();
         let mut items = vec![MultiSelectItem {
             id: STATUS_LINE_USE_THEME_COLORS_ITEM_ID.to_string(),
-            name: "Use theme colors".to_string(),
-            description: Some("Apply colors from the active /theme".to_string()),
+            name: localizer.text("status-line-use-theme-colors", None, || {
+                "Use theme colors".to_string()
+            }),
+            description: Some(localizer.text("status-line-apply-theme-colors", None, || {
+                "Apply colors from the active /theme".to_string()
+            })),
             enabled: use_theme_colors,
             orderable: false,
             section_break_after: true,
@@ -302,8 +324,14 @@ impl StatusLineSetupView {
 
         Self {
             picker: MultiSelectPicker::builder(
-                "Configure Status Line".to_string(),
-                Some("Select which items to display in the status line.".to_string()),
+                localizer.text("status-line-configure-title", None, || {
+                    "Configure Status Line".to_string()
+                }),
+                Some(
+                    localizer.text("status-line-select-items-description", None, || {
+                        "Select which items to display in the status line.".to_string()
+                    }),
+                ),
                 app_event_tx,
             )
             .list_keymap(list_keymap)
@@ -667,6 +695,45 @@ mod tests {
         );
 
         assert_snapshot!(render_lines(&view, /*width*/ 72));
+    }
+
+    #[test]
+    fn setup_view_snapshot_uses_zh_cn_localizer() {
+        let localizer = crate::i18n::Localizer::from_ftl(
+            "zh-CN",
+            concat!(
+                "status-line-use-theme-colors = 使用主题颜色\n",
+                "status-line-apply-theme-colors = 应用当前 /theme 的颜色\n",
+                "status-line-configure-title = 配置状态栏\n",
+                "status-line-select-items-description = 选择要显示在状态栏中的项目。\n",
+            ),
+        );
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let view = StatusLineSetupView::new_with_localizer(
+            Some(&[
+                StatusLineItem::ModelName.to_string(),
+                StatusLineItem::CurrentDir.to_string(),
+                StatusLineItem::GitBranch.to_string(),
+            ]),
+            /*use_theme_colors*/ true,
+            StatusSurfacePreviewData::default(),
+            AppEventSender::new(tx_raw),
+            crate::keymap::RuntimeKeymap::defaults().list,
+            &localizer,
+        );
+
+        assert_snapshot!(
+            "status_line_setup_zh_cn_narrow",
+            render_lines(&view, /*width*/ 32)
+        );
+        assert_snapshot!(
+            "status_line_setup_zh_cn_medium",
+            render_lines(&view, /*width*/ 72)
+        );
+        assert_snapshot!(
+            "status_line_setup_zh_cn_wide",
+            render_lines(&view, /*width*/ 120)
+        );
     }
 
     fn render_lines(view: &StatusLineSetupView, width: u16) -> String {

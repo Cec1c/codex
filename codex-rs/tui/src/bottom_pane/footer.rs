@@ -998,15 +998,33 @@ fn build_columns(entries: Vec<Line<'static>>) -> Vec<Line<'static>> {
 pub(crate) fn context_window_line(percent: Option<i64>, used_tokens: Option<i64>) -> Line<'static> {
     if let Some(percent) = percent {
         let percent = percent.clamp(0, 100);
-        return Line::from(vec![Span::from(format!("{percent}% context left")).dim()]);
+        let text = crate::i18n::global().text_with_string_arg(
+            "footer-context-remaining",
+            "percent",
+            percent.to_string(),
+            || format!("{percent}% context left"),
+        );
+        return Line::from(vec![Span::from(text).dim()]);
     }
 
     if let Some(tokens) = used_tokens {
         let used_fmt = format_tokens_compact(tokens);
-        return Line::from(vec![Span::from(format!("{used_fmt} used")).dim()]);
+        let text = crate::i18n::global().text_with_string_arg(
+            "footer-tokens-used",
+            "tokens",
+            used_fmt.as_str(),
+            || format!("{used_fmt} used"),
+        );
+        return Line::from(vec![Span::from(text).dim()]);
     }
 
-    Line::from(vec![Span::from("100% context left").dim()])
+    let text = crate::i18n::global().text_with_string_arg(
+        "footer-context-remaining",
+        "percent",
+        "100",
+        || "100% context left".to_string(),
+    );
+    Line::from(vec![Span::from(text).dim()])
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

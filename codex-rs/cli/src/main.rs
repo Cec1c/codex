@@ -954,6 +954,12 @@ fn stage_str(stage: Stage) -> &'static str {
 }
 
 fn main() -> anyhow::Result<()> {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    if args.len() == 2 && args[1].as_os_str() == std::ffi::OsStr::new("--ultra-i18n-self-check") {
+        println!("{}", codex_tui::ultra_i18n_self_check_json());
+        return Ok(());
+    }
+
     let remote_control_disabled = codex_app_server::take_remote_control_disabled_env();
     arg0_dispatch_or_else(move |arg0_paths: Arg0DispatchPaths| async move {
         cli_main(arg0_paths, remote_control_disabled).await?;

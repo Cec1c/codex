@@ -467,6 +467,10 @@ impl ChatWidget {
             SlashCommand::Theme => {
                 self.open_theme_picker();
             }
+            SlashCommand::Language => {
+                let (message, hint) = crate::i18n::language_status();
+                self.add_info_message(message, Some(hint));
+            }
             SlashCommand::Pets => {
                 self.open_pets_picker();
             }
@@ -895,6 +899,10 @@ impl ChatWidget {
             SlashCommand::Pets if !trimmed.is_empty() => {
                 self.select_pet_by_id(args);
             }
+            SlashCommand::Language => match crate::i18n::save_language_preference(trimmed) {
+                Ok(message) => self.add_info_message(message, /*hint*/ None),
+                Err(message) => self.add_error_message(message),
+            },
             _ => self.dispatch_command(cmd),
         }
         if source == SlashCommandDispatchSource::Live && cmd != SlashCommand::Goal {
@@ -944,12 +952,17 @@ impl ChatWidget {
         let Some(command) =
             find_slash_command(name, self.builtin_command_flags(), &service_tier_commands)
         else {
-            self.add_info_message(
-                format!(
-                    r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
-                ),
-                /*hint*/ None,
+            let message = crate::i18n::global().text_with_string_arg(
+                "slash-unrecognized-command",
+                "name",
+                name,
+                || {
+                    format!(
+                        r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+                    )
+                },
             );
+            self.add_info_message(message, /*hint*/ None);
             return QueueDrain::Continue;
         };
 
@@ -1099,6 +1112,7 @@ impl ChatWidget {
             | SlashCommand::Title
             | SlashCommand::Statusline
             | SlashCommand::Theme
+            | SlashCommand::Language
             | SlashCommand::Pets => QueueDrain::Stop,
         }
     }

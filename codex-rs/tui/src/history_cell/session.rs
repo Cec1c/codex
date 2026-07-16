@@ -94,8 +94,9 @@ impl HistoryCell for TooltipHistoryCell {
             .saturating_sub(indent_width)
             .max(1);
         let mut lines: Vec<Line<'static>> = Vec::new();
+        let label = crate::i18n::global().text("tooltip-label", None, || "Tip:".to_string());
         append_markdown(
-            &format!("**Tip:** {}", self.tip),
+            &format!("**{label}** {}", self.tip),
             Some(wrap_width),
             Some(self.cwd.as_path()),
             &mut lines,
@@ -105,7 +106,8 @@ impl HistoryCell for TooltipHistoryCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        vec![Line::from(format!("Tip: {}", self.tip))]
+        let label = crate::i18n::global().text("tooltip-label", None, || "Tip:".to_string());
+        vec![Line::from(format!("{label} {}", self.tip))]
     }
 }
 
@@ -334,20 +336,31 @@ impl HistoryCell for SessionHeaderHistoryCell {
         ];
 
         const CHANGE_MODEL_HINT_COMMAND: &str = "/model";
-        const CHANGE_MODEL_HINT_EXPLANATION: &str = " to change";
-        const DIR_LABEL: &str = "directory:";
-        const PERMISSIONS_LABEL: &str = "permissions:";
-        let label_width = if self.yolo_mode {
-            DIR_LABEL.len().max(PERMISSIONS_LABEL.len())
-        } else {
-            DIR_LABEL.len()
+        let localizer = crate::i18n::global();
+        let model_label = localizer.text("session-card-model-label", None, || "model:".to_string());
+        let dir_label = localizer.text("session-card-directory-label", None, || {
+            "directory:".to_string()
+        });
+        let permissions_label = localizer.text("session-card-permissions-label", None, || {
+            "permissions:".to_string()
+        });
+        let change_model_hint = localizer.text("session-card-change-model-hint", None, || {
+            "to change".to_string()
+        });
+        let label_width = [
+            UnicodeWidthStr::width(model_label.as_str()),
+            UnicodeWidthStr::width(dir_label.as_str()),
+            UnicodeWidthStr::width(permissions_label.as_str()),
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+        let pad_label = |label: &str| {
+            let padding = label_width.saturating_sub(UnicodeWidthStr::width(label));
+            format!("{label}{}", " ".repeat(padding))
         };
 
-        let model_label = format!(
-            "{model_label:<label_width$}",
-            model_label = "model:",
-            label_width = label_width
-        );
+        let model_label = pad_label(&model_label);
         let reasoning_label = self.reasoning_label();
         let model_spans: Vec<Span<'static>> = {
             let mut spans = vec![
@@ -364,11 +377,12 @@ impl HistoryCell for SessionHeaderHistoryCell {
             }
             spans.push("   ".dim());
             spans.push(CHANGE_MODEL_HINT_COMMAND.cyan());
-            spans.push(CHANGE_MODEL_HINT_EXPLANATION.dim());
+            spans.push(" ".dim());
+            spans.push(change_model_hint.clone().dim());
             spans
         };
 
-        let dir_label = format!("{DIR_LABEL:<label_width$}");
+        let dir_label = pad_label(&dir_label);
         let dir_prefix = format!("{dir_label} ");
         let dir_prefix_width = UnicodeWidthStr::width(dir_prefix.as_str());
         let dir_max_width = inner_width.saturating_sub(dir_prefix_width);
@@ -383,7 +397,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
         ];
 
         if self.yolo_mode {
-            let permissions_label = format!("{PERMISSIONS_LABEL:<label_width$}");
+            let permissions_label = pad_label(&permissions_label);
             lines.push(make_row(vec![
                 Span::from(format!("{permissions_label} ")).dim(),
                 "YOLO mode".magenta().bold(),
@@ -394,22 +408,30 @@ impl HistoryCell for SessionHeaderHistoryCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
+        let localizer = crate::i18n::global();
+        let model_label = localizer.text("session-card-model-label", None, || "model:".to_string());
+        let dir_label = localizer.text("session-card-directory-label", None, || {
+            "directory:".to_string()
+        });
+        let permissions_label = localizer.text("session-card-permissions-label", None, || {
+            "permissions:".to_string()
+        });
         let mut lines = vec![
             Line::from(format!("OpenAI Codex (v{})", self.version)),
             Line::from(format!(
-                "model: {}{}",
+                "{model_label} {}{}",
                 self.model,
                 self.reasoning_label()
                     .map(|reasoning| format!(" {reasoning}"))
                     .unwrap_or_default()
             )),
             Line::from(format!(
-                "directory: {}",
+                "{dir_label} {}",
                 self.format_directory(/*max_width*/ None)
             )),
         ];
         if self.yolo_mode {
-            lines.push(Line::from("permissions: YOLO mode"));
+            lines.push(Line::from(format!("{permissions_label} YOLO mode")));
         }
         lines
     }
