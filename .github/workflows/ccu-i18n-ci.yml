@@ -1,0 +1,57 @@
+name: CCU i18n CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/scripts/ccu-package-release.ps1"
+      - ".github/workflows/ccu-i18n-*.yml"
+      - "codex-rs/tui/**"
+      - "docs/ccu/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/scripts/ccu-package-release.ps1"
+      - ".github/workflows/ccu-i18n-*.yml"
+      - "codex-rs/tui/**"
+      - "docs/ccu/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ccu-i18n-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      LIBSQLITE3_FLAGS: SQLITE_DISABLE_INTRINSIC
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+
+      - name: Configure rusty_v8 artifacts
+        uses: ./.github/actions/setup-rusty-v8
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Verify workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/ccu-i18n-ci.yml .github/workflows/ccu-i18n-release.yml
+
+      - name: Verify CCU TUI contract
+        working-directory: codex-rs
+        run: |
+          cargo fmt --all -- --check
+          cargo test -p codex-tui i18n::tests --locked
+          cargo test -p codex-tui ccu_theme --locked
+          cargo test -p codex-tui status_line --locked
+          cargo test -p codex-tui footer::tests --locked
+          cargo test -p codex-tui session_header --locked
+          cargo check -p codex-cli --locked
