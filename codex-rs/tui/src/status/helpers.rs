@@ -244,7 +244,7 @@ mod tests {
                 &config,
                 &[PathUri::from_abs_path(&global_agents_path.abs())]
             ),
-            format_directory_display(&global_agents_path, /*max_width*/ None)
+            normalize_agents_display_path(&global_agents_path)
         );
     }
 
@@ -257,7 +257,7 @@ mod tests {
 
         assert_eq!(
             compose_agents_summary(&config, &[PathUri::from_abs_path(&override_path.abs())]),
-            format_directory_display(&override_path, /*max_width*/ None)
+            normalize_agents_display_path(&override_path)
         );
     }
 
@@ -301,7 +301,7 @@ mod tests {
         let mut paths = summary.split(", ");
         assert_eq!(
             paths.next(),
-            Some(format_directory_display(&global_agents_path, /*max_width*/ None).as_str())
+            Some(normalize_agents_display_path(&global_agents_path).as_str())
         );
         let project_path = paths.next().expect("project agents path");
         assert!(project_path.ends_with("project.md"));
