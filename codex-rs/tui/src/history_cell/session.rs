@@ -163,36 +163,72 @@ pub(crate) fn new_session_info(
     let mut parts: Vec<Box<dyn HistoryCell>> = vec![Box::new(header)];
 
     if is_first_event {
+        let localizer = crate::i18n::global();
         // Help lines below the header (new copy and list)
         let help_lines: Vec<Line<'static>> = vec![
-            "  To get started, describe a task or try one of these commands:"
-                .dim()
-                .into(),
+            format!(
+                "  {}",
+                localizer.text("session-help-intro", None, || {
+                    "To get started, describe a task or try one of these commands:".to_string()
+                })
+            )
+            .dim()
+            .into(),
             Line::from(""),
             Line::from(vec![
                 "  ".into(),
                 "/init".into(),
-                " - create an AGENTS.md file with instructions for Codex".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-init", None, || {
+                        "create an AGENTS.md file with instructions for Codex".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/status".into(),
-                " - show current session configuration".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-status", None, || {
+                        "show current session configuration".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/permissions".into(),
-                " - choose what Codex is allowed to do".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-permissions", None, || {
+                        "choose what Codex is allowed to do".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/model".into(),
-                " - choose what model and reasoning effort to use".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-model", None, || {
+                        "choose what model and reasoning effort to use".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/review".into(),
-                " - review any changes and find issues".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-review", None, || {
+                        "review any changes and find issues".to_string()
+                    })
+                )
+                .dim(),
             ]),
         ];
 
@@ -206,10 +242,31 @@ pub(crate) fn new_session_info(
             parts.push(Box::new(tooltips));
         }
         if requested_model != session.model.as_str() {
+            let localizer = crate::i18n::global();
             let lines = vec![
-                "model changed:".magenta().bold().into(),
-                format!("requested: {requested_model}").into(),
-                format!("used: {}", session.model).into(),
+                localizer
+                    .text("session-model-changed", None, || {
+                        "model changed:".to_string()
+                    })
+                    .magenta()
+                    .bold()
+                    .into(),
+                localizer
+                    .text_with_string_arg(
+                        "session-model-requested",
+                        "model",
+                        requested_model,
+                        || format!("requested: {requested_model}"),
+                    )
+                    .into(),
+                localizer
+                    .text_with_string_arg(
+                        "session-model-used",
+                        "model",
+                        session.model.as_str(),
+                        || format!("used: {}", session.model),
+                    )
+                    .into(),
             ];
             parts.push(Box::new(PlainHistoryCell { lines }));
         }
@@ -335,11 +392,28 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let make_row = |spans: Vec<Span<'static>>| Line::from(spans);
 
         // Title line rendered inside the box: ">_ OpenAI Codex (vX)"
+        let ccu_theme = crate::ccu_theme::active();
         let title_spans: Vec<Span<'static>> = vec![
-            Span::from(">_ ").dim(),
-            Span::from("OpenAI Codex").bold(),
+            Span::styled(
+                ">_ ",
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("label"))
+                    .unwrap_or_else(|| Style::default().dim()),
+            ),
+            Span::styled(
+                "OpenAI Codex",
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("title"))
+                    .unwrap_or_default()
+                    .bold(),
+            ),
             Span::from(" ").dim(),
-            Span::from(format!("(v{})", self.version)).dim(),
+            Span::styled(
+                format!("(v{})", self.version),
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("version"))
+                    .unwrap_or_else(|| Style::default().dim()),
+            ),
         ];
 
         const CHANGE_MODEL_HINT_COMMAND: &str = "/model";
@@ -354,6 +428,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let change_model_hint = localizer.text("session-card-change-model-hint", None, || {
             "to change".to_string()
         });
+        let yolo_mode = localizer.text("session-card-yolo-mode", None, || "YOLO mode".to_string());
         let label_width = [
             UnicodeWidthStr::width(model_label.as_str()),
             UnicodeWidthStr::width(dir_label.as_str()),
@@ -371,12 +446,27 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let reasoning_label = self.reasoning_label();
         let model_spans: Vec<Span<'static>> = {
             let mut spans = vec![
-                Span::from(format!("{model_label} ")).dim(),
-                Span::styled(self.model.clone(), self.model_style),
+                Span::styled(
+                    format!("{model_label} "),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("label"))
+                        .unwrap_or_else(|| Style::default().dim()),
+                ),
+                Span::styled(
+                    self.model.clone(),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("model"))
+                        .unwrap_or(self.model_style),
+                ),
             ];
             if let Some(reasoning) = reasoning_label {
                 spans.push(Span::from(" "));
-                spans.push(Span::from(reasoning.to_owned()));
+                spans.push(Span::styled(
+                    reasoning.to_owned(),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("model"))
+                        .unwrap_or_default(),
+                ));
             }
             if self.show_fast_status {
                 spans.push("   ".into());
@@ -385,7 +475,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
             spans.push("   ".dim());
             spans.push(CHANGE_MODEL_HINT_COMMAND.cyan());
             spans.push(" ".dim());
-            spans.push(change_model_hint.clone().dim());
+            spans.push(change_model_hint.dim());
             spans
         };
 
@@ -394,7 +484,20 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let dir_prefix_width = UnicodeWidthStr::width(dir_prefix.as_str());
         let dir_max_width = inner_width.saturating_sub(dir_prefix_width);
         let dir = self.format_directory(Some(dir_max_width));
-        let dir_spans = vec![Span::from(dir_prefix).dim(), Span::from(dir)];
+        let dir_spans = vec![
+            Span::styled(
+                dir_prefix,
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("label"))
+                    .unwrap_or_else(|| Style::default().dim()),
+            ),
+            Span::styled(
+                dir,
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("path"))
+                    .unwrap_or_default(),
+            ),
+        ];
 
         let mut lines = vec![
             make_row(title_spans),
@@ -406,8 +509,19 @@ impl HistoryCell for SessionHeaderHistoryCell {
         if self.yolo_mode {
             let permissions_label = pad_label(&permissions_label);
             lines.push(make_row(vec![
-                Span::from(format!("{permissions_label} ")).dim(),
-                "YOLO mode".magenta().bold(),
+                Span::styled(
+                    format!("{permissions_label} "),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("label"))
+                        .unwrap_or_else(|| Style::default().dim()),
+                ),
+                Span::styled(
+                    yolo_mode,
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("permissions"))
+                        .unwrap_or_else(|| Style::default().magenta())
+                        .bold(),
+                ),
             ]));
         }
 
@@ -423,6 +537,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let permissions_label = localizer.text("session-card-permissions-label", None, || {
             "permissions:".to_string()
         });
+        let yolo_mode = localizer.text("session-card-yolo-mode", None, || "YOLO mode".to_string());
         let mut lines = vec![
             Line::from(format!("OpenAI Codex (v{})", self.version)),
             Line::from(format!(
@@ -438,7 +553,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
             )),
         ];
         if self.yolo_mode {
-            lines.push(Line::from(format!("{permissions_label} YOLO mode")));
+            lines.push(Line::from(format!("{permissions_label} {yolo_mode}")));
         }
         lines
     }

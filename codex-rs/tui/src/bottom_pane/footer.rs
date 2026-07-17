@@ -108,6 +108,10 @@ pub(crate) enum GoalStatusIndicator {
 const MODE_CYCLE_HINT: &str = "shift+tab to cycle";
 const FOOTER_CONTEXT_GAP_COLS: u16 = 1;
 
+fn footer_text(key: &str, english: &str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct FooterKeyHints {
     pub(crate) toggle_shortcuts: Option<KeyBinding>,
@@ -141,16 +145,29 @@ impl FooterKeyHints {
 impl CollaborationModeIndicator {
     fn label(self, show_cycle_hint: bool) -> String {
         let suffix = if show_cycle_hint {
-            format!(" ({MODE_CYCLE_HINT})")
+            format!(
+                " ({})",
+                footer_text("footer-cycle-mode-hint", MODE_CYCLE_HINT)
+            )
         } else {
             String::new()
         };
         match self {
-            CollaborationModeIndicator::Plan => format!("Plan mode{suffix}"),
-            CollaborationModeIndicator::PairProgramming => {
-                format!("Pair Programming mode{suffix}")
+            CollaborationModeIndicator::Plan => {
+                format!("{}{suffix}", footer_text("footer-plan-mode", "Plan mode"))
             }
-            CollaborationModeIndicator::Execute => format!("Execute mode{suffix}"),
+            CollaborationModeIndicator::PairProgramming => {
+                format!(
+                    "{}{suffix}",
+                    footer_text("footer-pair-programming-mode", "Pair Programming mode")
+                )
+            }
+            CollaborationModeIndicator::Execute => {
+                format!(
+                    "{}{suffix}",
+                    footer_text("footer-execute-mode", "Execute mode")
+                )
+            }
         }
     }
 
@@ -324,19 +341,19 @@ fn left_side_line(
         SummaryHintKind::Shortcuts => {
             if let Some(key) = key_hints.toggle_shortcuts {
                 line.push_span(key);
-                line.push_span(" for shortcuts".dim());
+                line.push_span(footer_text("footer-for-shortcuts", " for shortcuts").dim());
             }
         }
         SummaryHintKind::QueueMessage => {
             if let Some(key) = key_hints.queue {
                 line.push_span(key);
-                line.push_span(" to queue message".dim());
+                line.push_span(footer_text("footer-to-queue-message", " to queue message").dim());
             }
         }
         SummaryHintKind::QueueShort => {
             if let Some(key) = key_hints.queue {
                 line.push_span(key);
-                line.push_span(" to queue".dim());
+                line.push_span(footer_text("footer-to-queue", " to queue").dim());
             }
         }
     };
@@ -723,7 +740,13 @@ fn footer_from_props_lines(
         FooterMode::QuitShortcutReminder => {
             vec![quit_shortcut_reminder_line(props.quit_shortcut_key)]
         }
-        FooterMode::HistorySearch => vec![Line::from("reverse-i-search: ").dim()],
+        FooterMode::HistorySearch => vec![
+            Line::from(footer_text(
+                "footer-history-search-prompt",
+                "reverse-i-search: ",
+            ))
+            .dim(),
+        ],
         FooterMode::ComposerEmpty => {
             let state = LeftSideState {
                 hint: if show_shortcuts_hint {
@@ -875,19 +898,31 @@ struct ShortcutsState {
 }
 
 fn quit_shortcut_reminder_line(key: KeyBinding) -> Line<'static> {
-    Line::from(vec![key.into(), " again to quit".into()]).dim()
+    Line::from(vec![
+        key.into(),
+        footer_text("footer-again-to-quit", " again to quit").into(),
+    ])
+    .dim()
 }
 
 fn esc_hint_line(esc_backtrack_hint: bool) -> Line<'static> {
     let esc = key_hint::plain(KeyCode::Esc);
     if esc_backtrack_hint {
-        Line::from(vec![esc.into(), " again to edit previous message".into()]).dim()
+        Line::from(vec![
+            esc.into(),
+            footer_text(
+                "footer-again-to-edit-previous",
+                " again to edit previous message",
+            )
+            .into(),
+        ])
+        .dim()
     } else {
         Line::from(vec![
             esc.into(),
             " ".into(),
             esc.into(),
-            " to edit previous message".into(),
+            footer_text("footer-to-edit-previous", " to edit previous message").into(),
         ])
         .dim()
     }
@@ -952,7 +987,7 @@ fn shortcut_overlay_lines(state: ShortcutsState) -> Vec<Line<'static>> {
     let mut lines = build_columns(ordered);
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
-        "customize shortcuts with ".into(),
+        footer_text("footer-customize-shortcuts", "customize shortcuts with ").into(),
         "/keymap".cyan(),
     ]));
     lines
@@ -1121,33 +1156,59 @@ impl ShortcutDescriptor {
         match self.id {
             ShortcutId::QueueMessageTab => {
                 if state.is_task_running || state.queue_submissions {
-                    line.push_span(" to queue message");
+                    line.push_span(footer_text("footer-to-queue-message", " to queue message"));
                 } else {
-                    line.push_span(" to submit message");
+                    line.push_span(footer_text(
+                        "footer-to-submit-message",
+                        " to submit message",
+                    ));
                 }
             }
             ShortcutId::EditPrevious => {
                 if state.esc_backtrack_hint {
-                    line.push_span(" again to edit previous message");
+                    line.push_span(footer_text(
+                        "footer-again-to-edit-previous",
+                        " again to edit previous message",
+                    ));
                 } else {
                     line.extend(vec![
                         " ".into(),
                         key.into(),
-                        " to edit previous message".into(),
+                        footer_text("footer-to-edit-previous", " to edit previous message").into(),
                     ]);
                 }
             }
             ShortcutId::Quit => {
                 if state.is_task_running {
-                    line.push_span(" to interrupt");
+                    line.push_span(footer_text("footer-to-interrupt", " to interrupt"));
                 } else {
-                    line.push_span(" to exit");
+                    line.push_span(footer_text("footer-to-exit", " to exit"));
                 }
             }
-            _ => line.push_span(self.label),
+            _ => line.push_span(shortcut_label(self.id, self.label)),
         };
         Some(line)
     }
+}
+
+fn shortcut_label(id: ShortcutId, english: &str) -> String {
+    let key = match id {
+        ShortcutId::Commands => "footer-shortcut-commands",
+        ShortcutId::ShellCommands => "footer-shortcut-shell-commands",
+        ShortcutId::InsertNewline => "footer-shortcut-newline",
+        ShortcutId::QueueMessageTab => "footer-to-queue-message",
+        ShortcutId::FilePaths => "footer-shortcut-file-paths",
+        ShortcutId::PasteImage => "footer-shortcut-paste-images",
+        ShortcutId::ExternalEditor => "footer-shortcut-external-editor",
+        ShortcutId::EditPrevious => "footer-to-edit-previous",
+        ShortcutId::HistorySearch => "footer-shortcut-history-search",
+        ShortcutId::Quit => "footer-to-exit",
+        ShortcutId::ShowTranscript => "footer-shortcut-transcript",
+        ShortcutId::ChangeMode => "footer-shortcut-change-mode",
+        ShortcutId::ReasoningDown => "footer-shortcut-reasoning-down",
+        ShortcutId::ReasoningUp => "footer-shortcut-reasoning-up",
+    };
+    footer_text(key, english)
 }
 
 const SHORTCUTS: &[ShortcutDescriptor] = &[

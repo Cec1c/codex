@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -14,8 +15,14 @@ use unic_langid::LanguageIdentifier;
 
 use crate::slash_command::SlashCommand;
 
-const ZH_HANS_FTL: &str = include_str!("../i18n/zh-Hans.ftl");
 const UI_LANGUAGE_FILE: &str = "ui-language";
+
+mod language_pack;
+
+pub(crate) use language_pack::discover_language_packs;
+use language_pack::is_english_locale;
+pub(crate) use language_pack::language_pack_root;
+use language_pack::resolve_language_pack;
 
 #[cfg(test)]
 #[path = "i18n_tests.rs"]
@@ -53,19 +60,36 @@ impl Localizer {
     }
 
     pub(crate) fn from_runtime() -> Self {
+        let Ok(codex_home) = find_codex_home() else {
+            return Self::english();
+        };
         let requested_locale = std::env::var("CODEX_UI_LANGUAGE")
             .ok()
             .or_else(|| {
-                language_preference_path()
-                    .and_then(|path| fs::read_to_string(path).ok())
+                fs::read_to_string(language_preference_path(&codex_home))
+                    .ok()
                     .map(|value| value.trim().to_string())
                     .filter(|value| !value.is_empty())
             })
             .unwrap_or_else(|| "en".to_string());
-        match normalized_language(&requested_locale) {
-            Some("zh-Hans") => Self::from_ftl("zh-Hans", ZH_HANS_FTL),
-            _ => Self::english(),
+        let root = language_pack_root(&codex_home);
+        Self::from_language_pack_root(&requested_locale, &root)
+    }
+
+    pub(crate) fn from_language_pack_root(requested_locale: &str, root: &Path) -> Self {
+        if is_english_locale(requested_locale) {
+            return Self::english();
         }
+        let Ok(candidates) = discover_language_packs(root) else {
+            return Self::english();
+        };
+        let Some(candidate) = resolve_language_pack(requested_locale, &candidates) else {
+            return Self::english();
+        };
+        let Some(source) = candidate.source.as_deref() else {
+            return Self::english();
+        };
+        Self::from_ftl(&candidate.locale, source)
     }
 
     pub(crate) fn text<F>(&self, key: &str, args: Option<&FluentArgs>, english: F) -> String
@@ -105,58 +129,47 @@ impl Localizer {
     }
 }
 
-fn language_preference_path() -> Option<PathBuf> {
-    find_codex_home()
-        .ok()
-        .map(|codex_home| codex_home.join(UI_LANGUAGE_FILE).to_path_buf())
+fn language_preference_path(codex_home: &Path) -> PathBuf {
+    codex_home.join(UI_LANGUAGE_FILE)
 }
 
-fn normalized_language(input: &str) -> Option<&'static str> {
-    match input.trim().to_ascii_lowercase().as_str() {
-        "zh" | "zh-cn" | "zh-hans" | "chinese" => Some("zh-Hans"),
-        "en" | "en-us" | "english" => Some("en"),
-        _ => None,
-    }
+#[cfg(test)]
+fn normalized_language(input: &str) -> Option<String> {
+    language_pack::normalized_requested_locale(input)
 }
 
-pub(crate) fn language_status() -> (String, String) {
-    let localizer = global();
-    let locale = localizer
+pub(crate) fn active_locale() -> String {
+    global()
         .locale
         .as_ref()
         .map(ToString::to_string)
-        .unwrap_or_else(|| "en".to_string());
-    let mut args = FluentArgs::new();
-    args.set("locale", locale.as_str());
-    let current = localizer.text("language-current", Some(&args), || {
-        format!("Current language: {locale}")
-    });
-    let help = localizer.text("language-help", None, || {
-        "Use /language zh-Hans or /language en to choose a language; restart Codex to apply."
-            .to_string()
-    });
-    (current, help)
+        .unwrap_or_else(|| "en".to_string())
 }
 
-pub(crate) fn save_language_preference(input: &str) -> Result<String, String> {
+pub(crate) fn save_language_preference(codex_home: &Path, input: &str) -> Result<String, String> {
     let localizer = global();
-    let Some(locale) = normalized_language(input) else {
+    let root = language_pack_root(codex_home);
+    let candidates = discover_language_packs(&root)?;
+    let locale = if is_english_locale(input) {
+        "en".to_string()
+    } else if let Some(candidate) = resolve_language_pack(input, &candidates) {
+        candidate.locale.clone()
+    } else {
         let mut args = FluentArgs::new();
         args.set("locale", input.trim());
         return Err(localizer.text("language-unsupported", Some(&args), || {
             format!(
-                "Unsupported language {}. Available options: zh-Hans, en.",
+                "Language {} is not installed or compatible. Use /language to see available options.",
                 input.trim()
             )
         }));
     };
-    let Some(path) = language_preference_path() else {
-        return Err("Could not resolve CODEX_HOME for the language preference.".to_string());
-    };
-    fs::write(path, format!("{locale}\n"))
+    fs::create_dir_all(codex_home)
+        .map_err(|error| format!("Could not create CODEX_HOME: {error}"))?;
+    fs::write(language_preference_path(codex_home), format!("{locale}\n"))
         .map_err(|error| format!("Could not save language preference: {error}"))?;
     let mut args = FluentArgs::new();
-    args.set("locale", locale);
+    args.set("locale", locale.as_str());
     Ok(localizer.text("language-saved", Some(&args), || {
         format!("Selected {locale}; restart Codex to apply.")
     }))
@@ -475,6 +488,11 @@ pub(super) fn self_check_json(localizer: &Localizer) -> String {
             "session-card-change-model-hint",
             "to change",
         ),
+        (
+            "tui.session-card.yolo-mode",
+            "session-card-yolo-mode",
+            "YOLO mode",
+        ),
         ("tui.tooltip.label", "tooltip-label", "Tip:"),
         (
             "tui.tooltip.rename-threads",
@@ -578,6 +596,13 @@ pub(super) fn self_check_json(localizer: &Localizer) -> String {
             "tokens",
             "12.3K",
             "12.3K used",
+        ),
+        (
+            "tui.status-line.quota-remaining",
+            "status-line-quota-remaining",
+            "percent",
+            "82",
+            "Quota 82%",
         ),
         (
             "tui.footer.context-remaining",
