@@ -16,6 +16,9 @@ use codex_protocol::config_types::ApprovalsReviewer;
 use codex_protocol::config_types::ServiceTier;
 use codex_protocol::models::PermissionProfile;
 use codex_utils_sandbox_summary::summarize_permission_profile;
+use serde::Deserialize;
+use std::fs;
+use std::time::Duration as StdDuration;
 
 use super::status_state::TerminalTitleStatusKind;
 
@@ -51,6 +54,13 @@ struct StatusSurfaceSelections {
     invalid_terminal_title_items: Vec<String>,
 }
 
+fn format_status_line_duration(duration: StdDuration) -> String {
+    if duration < StdDuration::from_secs(1) {
+        return "0s".to_string();
+    }
+    codex_utils_elapsed::format_duration(StdDuration::from_secs(duration.as_secs()))
+}
+
 impl StatusSurfaceSelections {
     fn uses_git_branch(&self) -> bool {
         self.status_line_items.contains(&StatusLineItem::GitBranch)
@@ -82,6 +92,52 @@ impl StatusSurfaceSelections {
 pub(super) struct CachedProjectRootName {
     pub(super) cwd: PathBuf,
     pub(super) root_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CcuQuotaDocument {
+    accounts: Vec<CcuQuotaAccount>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CcuQuotaAccount {
+    plan: String,
+    remaining_percent: f64,
+    weight: Option<f64>,
+}
+
+fn configured_ccu_quota_percent() -> Option<u8> {
+    let path = std::env::var_os("CODEX_CCU_QUOTA_PATH")?;
+    let source = fs::read_to_string(path).ok()?;
+    let document: CcuQuotaDocument = serde_json::from_str(&source).ok()?;
+    let mut weighted_remaining = 0.0;
+    let mut total_weight = 0.0;
+    for account in document.accounts {
+        if !account.remaining_percent.is_finite()
+            || !(0.0..=100.0).contains(&account.remaining_percent)
+        {
+            continue;
+        }
+        let weight = account.weight.unwrap_or_else(|| {
+            if account.plan.eq_ignore_ascii_case("pro20x") {
+                20.0
+            } else {
+                1.0
+            }
+        });
+        if !weight.is_finite() || weight <= 0.0 {
+            continue;
+        }
+        weighted_remaining += account.remaining_percent * weight;
+        total_weight += weight;
+    }
+    (total_weight > 0.0).then(|| {
+        (weighted_remaining / total_weight)
+            .round()
+            .clamp(0.0, 100.0) as u8
+    })
 }
 
 impl ChatWidget {
@@ -718,6 +774,80 @@ impl ChatWidget {
                     || format!("Context {used}% used"),
                 )
             }),
+            StatusLineItem::ContextTokens => self.status_line_context_window_size().map(|window| {
+                let used = self.status_line_total_usage().blended_total().max(0);
+                format!(
+                    "{}/{}",
+                    format_tokens_compact(used),
+                    format_tokens_compact(window)
+                )
+            }),
+            StatusLineItem::ContextProgress => {
+                let used = self
+                    .status_line_context_used_percent()
+                    .unwrap_or(0)
+                    .clamp(0, 100) as u8;
+                Some(crate::ccu_theme::render_progress(used))
+            }
+            StatusLineItem::SessionTiming => {
+                let now = Instant::now();
+                let session = now.saturating_duration_since(self.terminal_title_animation_origin);
+                let active = self
+                    .turn_lifecycle
+                    .goal_status_active_turn_started_at
+                    .map(|started| now.saturating_duration_since(started))
+                    .unwrap_or(StdDuration::ZERO);
+                Some(format!(
+                    "⏱ {} ⚡{}",
+                    format_status_line_duration(session),
+                    format_status_line_duration(active)
+                ))
+            }
+            StatusLineItem::Quota => {
+                if let Some(percent) = configured_ccu_quota_percent() {
+                    return Some(crate::i18n::global().text_with_string_arg(
+                        "status-line-quota-remaining",
+                        "percent",
+                        percent.to_string(),
+                        || format!("Quota {percent}%"),
+                    ));
+                }
+                let remaining = self
+                    .rate_limit_snapshots_by_limit_id
+                    .values()
+                    .filter_map(|snapshot| {
+                        snapshot
+                            .individual_limit
+                            .as_ref()
+                            .map(|limit| limit.percent_remaining)
+                            .or_else(|| {
+                                snapshot
+                                    .primary
+                                    .as_ref()
+                                    .map(|window| 100.0 - window.used_percent)
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                if !remaining.is_empty() {
+                    let percent =
+                        (remaining.iter().sum::<f64>() / remaining.len() as f64).round() as u8;
+                    return Some(crate::i18n::global().text_with_string_arg(
+                        "status-line-quota-remaining",
+                        "percent",
+                        percent.to_string(),
+                        || format!("Quota {percent}%"),
+                    ));
+                }
+                let credits = self
+                    .rate_limit_snapshots_by_limit_id
+                    .values()
+                    .filter_map(|snapshot| snapshot.credits.as_ref())
+                    .filter_map(|credits| credits.balance.as_deref())
+                    .filter_map(|balance| balance.trim().parse::<f64>().ok())
+                    .filter(|balance| balance.is_finite() && *balance >= 0.0)
+                    .sum::<f64>();
+                (credits > 0.0).then(|| format!("{credits:.2} credits"))
+            }
             StatusLineItem::FiveHourLimit => {
                 let (window, is_secondary) = self
                     .rate_limit_snapshots_by_limit_id
@@ -797,6 +927,10 @@ impl ChatWidget {
             StatusSurfacePreviewItem::ApprovalMode => StatusLineItem::ApprovalMode,
             StatusSurfacePreviewItem::ContextRemaining => StatusLineItem::ContextRemaining,
             StatusSurfacePreviewItem::ContextUsed => StatusLineItem::ContextUsed,
+            StatusSurfacePreviewItem::ContextTokens => StatusLineItem::ContextTokens,
+            StatusSurfacePreviewItem::ContextProgress => StatusLineItem::ContextProgress,
+            StatusSurfacePreviewItem::SessionTiming => StatusLineItem::SessionTiming,
+            StatusSurfacePreviewItem::Quota => StatusLineItem::Quota,
             StatusSurfacePreviewItem::FiveHourLimit => StatusLineItem::FiveHourLimit,
             StatusSurfacePreviewItem::WeeklyLimit => StatusLineItem::WeeklyLimit,
             StatusSurfacePreviewItem::CodexVersion => StatusLineItem::CodexVersion,
