@@ -197,7 +197,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cargo fmt --all -- --check
           cargo test -p codex-tui i18n::tests --locked
+          cargo test -p codex-tui ccu_theme --locked
+          cargo test -p codex-tui status_line --locked
+          cargo test -p codex-tui footer::tests --locked
+          cargo test -p codex-tui session_header --locked
           cargo check -p codex-cli --locked
 
       - name: Build Windows x64 Codex
@@ -263,13 +268,13 @@ jobs:
         run: |
           set -euo pipefail
           cat > release-notes.md <<EOF
-          CCU i18n build ${DISPLAY_VERSION}
+          CCU i18n 构建 ${DISPLAY_VERSION}
 
-          - Upstream release: ${UPSTREAM_TAG}
-          - Upstream commit: ${UPSTREAM_COMMIT}
-          - Fork commit: ${FORK_COMMIT}
-          - Platform: Windows x64
-          - Language packs are distributed and maintained by Codex CLI Ultra separately.
+          - 上游版本 / Upstream release: ${UPSTREAM_TAG}
+          - 上游提交 / Upstream commit: ${UPSTREAM_COMMIT}
+          - fork 提交 / Fork commit: ${FORK_COMMIT}
+          - 平台 / Platform: Windows x64
+          - 语言包和主题包由 Codex CLI Ultra 独立分发，二进制内始终保留英文逐条回退。
           EOF
           gh release create "$RELEASE_TAG" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \

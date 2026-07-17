@@ -25,6 +25,8 @@ approval-run-command-title = 是否运行以下命令？
 composer-write-file-tests = 为 @filename 编写测试
 mcp-client-failed-to-start = MCP 客户端 `{ $name }` 启动失败
 status-line-context-used = 上下文已用 { $percent }%
+status-line-quota-remaining = 额度 { $percent }%
+session-card-yolo-mode = YOLO 模式
 slash-unrecognized-command = 无法识别命令“/{ $name }”。输入“/”查看支持的命令列表。
 slash-model-description = 选择模型和推理强度
 slash-language-description = 查看或选择显示语言
@@ -35,7 +37,7 @@ language-unsupported = 语言 { $locale } 未安装或不兼容。
 #[test]
 fn language_aliases_are_normalized() {
     assert_eq!(normalized_language("zh-cn"), Some("zh-CN".to_string()));
-    assert_eq!(normalized_language("zh-Hans"), Some("zh-Hans".to_string()));
+    assert_eq!(normalized_language("zh-Hans"), Some("zh-CN".to_string()));
     assert_eq!(normalized_language("English"), Some("en".to_string()));
     assert_eq!(normalized_language("en-us"), Some("en-US".to_string()));
     assert_eq!(normalized_language("not a locale"), None);
@@ -166,6 +168,14 @@ fn self_check_includes_catalog_messages_and_missing_key_fallback() {
         "上下文已用 58%"
     );
     assert_eq!(
+        payload["messages"]["tui.status-line.quota-remaining"],
+        "额度 82%"
+    );
+    assert_eq!(
+        payload["messages"]["tui.session-card.yolo-mode"],
+        "YOLO 模式"
+    );
+    assert_eq!(
         payload["messages"]["tui.slash-command.unrecognized"],
         "无法识别命令“/sdsd”。输入“/”查看支持的命令列表。"
     );
@@ -183,7 +193,7 @@ fn self_check_includes_catalog_messages_and_missing_key_fallback() {
     );
     assert_eq!(
         payload["messages"].as_object().map(serde_json::Map::len),
-        Some(131)
+        Some(133)
     );
     assert_eq!(payload["messages"]["i18n.missing-key"], "English fallback");
 }
@@ -224,7 +234,7 @@ fn external_language_pack_is_discovered_and_loaded() {
     assert_eq!(candidates[0].locale, "zh-CN");
     assert_eq!(candidates[0].display_name, "简体中文 (zh-CN)");
 
-    let localizer = Localizer::from_language_pack_root("zh", temp.path());
+    let localizer = Localizer::from_language_pack_root("zh-Hans", temp.path());
     assert_eq!(
         localizer.text("status-line-configure-title", None, || {
             "Configure Status Line".to_string()

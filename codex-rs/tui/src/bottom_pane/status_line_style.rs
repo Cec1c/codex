@@ -40,11 +40,16 @@ impl StatusLineAccent {
             StatusLineItem::Status => Self::State,
             StatusLineItem::ContextRemaining
             | StatusLineItem::ContextUsed
+            | StatusLineItem::ContextTokens
             | StatusLineItem::ContextWindowSize
             | StatusLineItem::UsedTokens
             | StatusLineItem::TotalInputTokens
             | StatusLineItem::TotalOutputTokens => Self::Usage,
-            StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit => Self::Limit,
+            StatusLineItem::ContextProgress => Self::Progress,
+            StatusLineItem::SessionTiming => Self::Metadata,
+            StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit | StatusLineItem::Quota => {
+                Self::Limit
+            }
             StatusLineItem::CodexVersion | StatusLineItem::SessionId => Self::Metadata,
             StatusLineItem::FastMode | StatusLineItem::RawOutput => Self::Mode,
             StatusLineItem::Permissions => Self::Mode,
@@ -76,6 +81,17 @@ impl StatusLineAccent {
             Self::Branch | Self::Limit | Self::Thread => Style::default().magenta(),
         }
     }
+
+    fn ccu_role(self) -> &'static str {
+        match self {
+            Self::Model => "model",
+            Self::Usage => "usage",
+            Self::Progress => "progress",
+            Self::Limit => "quota",
+            Self::State | Self::Mode | Self::Metadata => "time",
+            Self::Path | Self::Branch | Self::Thread => "usage",
+        }
+    }
 }
 
 pub(crate) fn status_line_from_segments<I>(
@@ -100,14 +116,28 @@ where
     F: Fn(StatusLineAccent) -> Option<Style>,
 {
     let mut spans = Vec::new();
+    let ccu_theme = crate::ccu_theme::active();
+    let separator = ccu_theme
+        .map(|theme| theme.separator())
+        .unwrap_or(STATUS_LINE_SEPARATOR);
     for (item, text) in segments {
         if !spans.is_empty() {
-            spans.push(STATUS_LINE_SEPARATOR.dim());
+            spans.push(
+                ccu_theme
+                    .and_then(|theme| theme.status_style("separator"))
+                    .map_or_else(
+                        || Span::from(separator.to_string()).dim(),
+                        |style| Span::styled(separator.to_string(), style),
+                    ),
+            );
         }
         let style = if use_theme_colors {
             let accent = StatusLineAccent::for_item(item);
             soften_status_line_style(
-                theme_style_for_accent(accent).unwrap_or_else(|| accent.fallback_style()),
+                ccu_theme
+                    .and_then(|theme| theme.status_style(accent.ccu_role()))
+                    .or_else(|| theme_style_for_accent(accent))
+                    .unwrap_or_else(|| accent.fallback_style()),
             )
         } else {
             Style::default().dim()
