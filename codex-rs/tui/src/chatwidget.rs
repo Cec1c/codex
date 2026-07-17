@@ -350,6 +350,7 @@ mod input_submission;
 mod interrupts;
 use self::interrupts::InterruptManager;
 mod keymap_picker;
+mod language;
 mod mcp_startup;
 use self::mcp_startup::McpStartupStatus;
 mod pets;
