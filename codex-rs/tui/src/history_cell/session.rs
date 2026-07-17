@@ -468,7 +468,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
             spans.push("   ".dim());
             spans.push(CHANGE_MODEL_HINT_COMMAND.cyan());
             spans.push(" ".dim());
-            spans.push(change_model_hint.clone().dim());
+            spans.push(change_model_hint.dim());
             spans
         };
 
