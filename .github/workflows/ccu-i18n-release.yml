@@ -18,6 +18,10 @@ on:
         description: Fork branch containing the CCU i18n commits
         required: false
         type: string
+      prepared_ref:
+        description: Optional pre-resolved release branch for a known upstream conflict
+        required: false
+        type: string
 
 concurrency:
   group: ccu-i18n-release
@@ -55,6 +59,7 @@ jobs:
           REQUESTED_TAG: ${{ inputs.upstream_tag }}
           REQUESTED_REVISION: ${{ inputs.revision || '1' }}
           PATCH_REF: ${{ inputs.patch_ref || github.event.repository.default_branch }}
+          PREPARED_REF: ${{ inputs.prepared_ref }}
         run: |
           set -euo pipefail
 
@@ -86,8 +91,39 @@ jobs:
           git remote add upstream https://github.com/openai/codex.git 2>/dev/null || true
           git fetch --no-tags upstream main
           git fetch --no-tags upstream "refs/tags/$upstream_tag:refs/tags/$upstream_tag"
-          git fetch --no-tags origin "$PATCH_REF:refs/remotes/origin/ccu-patch-source"
           upstream_commit="$(git rev-list -n 1 "$upstream_tag")"
+
+          if [[ -n "$PREPARED_REF" ]]; then
+            if [[ "$PREPARED_REF" != "$release_branch" ]]; then
+              echo "Prepared ref must be the expected release branch $release_branch" >&2
+              exit 1
+            fi
+            git fetch --no-tags origin \
+              "refs/heads/$PREPARED_REF:refs/remotes/origin/ccu-prepared-release"
+            prepared_commit="$(git rev-parse refs/remotes/origin/ccu-prepared-release)"
+            if ! git merge-base --is-ancestor "$upstream_commit" "$prepared_commit"; then
+              echo "Prepared ref $PREPARED_REF is not based on $upstream_tag" >&2
+              exit 1
+            fi
+            if [[ -n "$(git rev-list --merges "$upstream_commit..$prepared_commit")" ]]; then
+              echo "Prepared ref $PREPARED_REF must contain only linear release patches" >&2
+              exit 1
+            fi
+            {
+              echo "should_release=true"
+              echo "upstream_version=$upstream_version"
+              echo "upstream_tag=$upstream_tag"
+              echo "upstream_commit=$upstream_commit"
+              echo "revision=$revision"
+              echo "display_version=$display_version"
+              echo "release_tag=$release_tag"
+              echo "release_branch=$release_branch"
+              echo "fork_commit=$prepared_commit"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags origin "$PATCH_REF:refs/remotes/origin/ccu-patch-source"
 
           mapfile -t patch_commits < <(
             git rev-list --reverse --no-merges \
