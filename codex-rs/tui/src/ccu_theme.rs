@@ -122,6 +122,10 @@ fn is_safe_id(value: &str) -> bool {
         })
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "CCU theme packs intentionally expose exact RGB colors"
+)]
 fn parse_color(value: &str) -> Option<Color> {
     let hex = value.strip_prefix('#')?;
     if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -199,6 +203,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the theme parser contract must preserve exact RGB values"
+    )]
     fn parses_rgb_colors() {
         assert_eq!(parse_color("#5eead4"), Some(Color::Rgb(94, 234, 212)));
         assert_eq!(parse_color("cyan"), None);

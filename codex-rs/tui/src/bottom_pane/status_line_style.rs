@@ -118,7 +118,7 @@ where
     let mut spans = Vec::new();
     let ccu_theme = crate::ccu_theme::active();
     let separator = ccu_theme
-        .map(|theme| theme.separator())
+        .map(super::super::ccu_theme::CcuTheme::separator)
         .unwrap_or(STATUS_LINE_SEPARATOR);
     for (item, text) in segments {
         if !spans.is_empty() {
