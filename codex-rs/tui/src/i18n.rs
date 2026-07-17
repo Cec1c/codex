@@ -488,6 +488,11 @@ pub(super) fn self_check_json(localizer: &Localizer) -> String {
             "session-card-change-model-hint",
             "to change",
         ),
+        (
+            "tui.session-card.yolo-mode",
+            "session-card-yolo-mode",
+            "YOLO mode",
+        ),
         ("tui.tooltip.label", "tooltip-label", "Tip:"),
         (
             "tui.tooltip.rename-threads",
@@ -591,6 +596,13 @@ pub(super) fn self_check_json(localizer: &Localizer) -> String {
             "tokens",
             "12.3K",
             "12.3K used",
+        ),
+        (
+            "tui.status-line.quota-remaining",
+            "status-line-quota-remaining",
+            "percent",
+            "82",
+            "Quota 82%",
         ),
         (
             "tui.footer.context-remaining",

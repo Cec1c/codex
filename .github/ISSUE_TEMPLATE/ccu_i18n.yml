@@ -1,0 +1,34 @@
+name: CCU i18n / theme issue
+description: 报告 CCU fork 的语言接口、主题接口或自动发布问题
+title: "[CCU] "
+labels: ["ccu", "tui"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 范围 / Area
+      options:
+        - 外部 FTL / External FTL
+        - /language
+        - 欢迎页主题 / Welcome theme
+        - 状态栏主题 / Status line theme
+        - 自动同步与 Release / Automation
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: 版本 / Versions
+      description: 上游 tag、fork release 和二进制显示版本
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 详情与复现 / Details and reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: fallback
+    attributes:
+      label: 英文回退结果 / English fallback result

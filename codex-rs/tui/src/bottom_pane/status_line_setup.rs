@@ -103,6 +103,18 @@ pub(crate) enum StatusLineItem {
     #[strum(to_string = "context-used", serialize = "context-usage")]
     ContextUsed,
 
+    /// Compact current token usage and total context window.
+    ContextTokens,
+
+    /// Theme-shaped context usage progress bar.
+    ContextProgress,
+
+    /// Total session elapsed time and active turn elapsed time.
+    SessionTiming,
+
+    /// Aggregated remaining quota or available credits.
+    Quota,
+
     /// Remaining usage on the primary rate limit.
     FiveHourLimit,
 
@@ -169,6 +181,18 @@ impl StatusLineItem {
             StatusLineItem::ContextUsed => {
                 "Percentage of context window used (omitted when unknown)"
             }
+            StatusLineItem::ContextTokens => {
+                "Compact tokens used and total context window (for example 0/1.0M)"
+            }
+            StatusLineItem::ContextProgress => {
+                "Theme-shaped context progress bar and used percentage"
+            }
+            StatusLineItem::SessionTiming => {
+                "Session elapsed time and current active-turn elapsed time"
+            }
+            StatusLineItem::Quota => {
+                "Aggregated quota remaining or credits; supports weighted CCU account metadata"
+            }
             StatusLineItem::FiveHourLimit => {
                 "Remaining usage on the primary usage limit (omitted when unavailable)"
             }
@@ -212,6 +236,10 @@ impl StatusLineItem {
             StatusLineItem::ApprovalMode => StatusSurfacePreviewItem::ApprovalMode,
             StatusLineItem::ContextRemaining => StatusSurfacePreviewItem::ContextRemaining,
             StatusLineItem::ContextUsed => StatusSurfacePreviewItem::ContextUsed,
+            StatusLineItem::ContextTokens => StatusSurfacePreviewItem::ContextTokens,
+            StatusLineItem::ContextProgress => StatusSurfacePreviewItem::ContextProgress,
+            StatusLineItem::SessionTiming => StatusSurfacePreviewItem::SessionTiming,
+            StatusLineItem::Quota => StatusSurfacePreviewItem::Quota,
             StatusLineItem::FiveHourLimit => StatusSurfacePreviewItem::FiveHourLimit,
             StatusLineItem::WeeklyLimit => StatusSurfacePreviewItem::WeeklyLimit,
             StatusLineItem::CodexVersion => StatusSurfacePreviewItem::CodexVersion,
@@ -306,6 +334,7 @@ impl StatusLineSetupView {
                     item,
                     /*enabled*/ true,
                     &preview_data,
+                    localizer,
                 ));
             }
         }
@@ -319,6 +348,7 @@ impl StatusLineSetupView {
                 item,
                 /*enabled*/ false,
                 &preview_data,
+                localizer,
             ));
         }
 
@@ -376,19 +406,25 @@ impl StatusLineSetupView {
         item: StatusLineItem,
         enabled: bool,
         preview_data: &StatusSurfacePreviewData,
+        localizer: &crate::i18n::Localizer,
     ) -> MultiSelectItem {
         let default_name = item.to_string();
         let default_description = item.description();
-        let (name, description) = match item {
+        let (runtime_name, runtime_description) = match item {
             StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit => (
                 preview_data.rate_limit_item_name(item.preview_item(), &default_name),
                 preview_data.rate_limit_item_description(item.preview_item(), default_description),
             ),
             _ => (default_name, default_description.to_string()),
         };
+        let item_id = item.to_string();
+        let name_key = format!("status-line-item-{item_id}-name");
+        let description_key = format!("status-line-item-{item_id}-description");
+        let name = localizer.text(&name_key, None, || runtime_name);
+        let description = localizer.text(&description_key, None, || runtime_description);
 
         MultiSelectItem {
-            id: item.to_string(),
+            id: item_id,
             name,
             description: Some(description),
             enabled,
