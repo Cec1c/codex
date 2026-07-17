@@ -464,8 +464,7 @@ impl ChatWidget {
                 self.open_theme_picker();
             }
             SlashCommand::Language => {
-                let (message, hint) = crate::i18n::language_status();
-                self.add_info_message(message, Some(hint));
+                self.open_language_picker();
             }
             SlashCommand::Pets => {
                 self.open_pets_picker();
@@ -894,10 +893,12 @@ impl ChatWidget {
             SlashCommand::Pets if !trimmed.is_empty() => {
                 self.select_pet_by_id(args);
             }
-            SlashCommand::Language => match crate::i18n::save_language_preference(trimmed) {
-                Ok(message) => self.add_info_message(message, /*hint*/ None),
-                Err(message) => self.add_error_message(message),
-            },
+            SlashCommand::Language => {
+                match crate::i18n::save_language_preference(&self.config.codex_home, trimmed) {
+                    Ok(message) => self.add_info_message(message, /*hint*/ None),
+                    Err(message) => self.add_error_message(message),
+                }
+            }
             _ => self.dispatch_command(cmd),
         }
         if source == SlashCommandDispatchSource::Live && cmd != SlashCommand::Goal {
