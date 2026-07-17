@@ -2,6 +2,9 @@ use super::*;
 use crate::bottom_pane::slash_commands::ServiceTierCommand;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
+use sha2::Digest;
+use sha2::Sha256;
+use std::path::Path;
 
 fn force_pet_image_support(chat: &mut ChatWidget) {
     chat.set_pet_image_support_for_tests(crate::pets::PetImageSupport::Supported(
@@ -2378,6 +2381,94 @@ async fn slash_pets_opens_picker() {
 
     let popup = render_bottom_popup(&chat, /*width*/ 80);
     assert_chatwidget_snapshot!("slash_pets_picker", popup);
+}
+
+fn install_test_language_pack(
+    codex_home: &Path,
+    directory: &str,
+    locale: &str,
+    native_name: &str,
+    api_min: u32,
+    api_max: u32,
+) {
+    let pack_dir = codex_home.join("ccu").join("languages").join(directory);
+    std::fs::create_dir_all(&pack_dir).expect("create language pack directory");
+    let source = format!("probe = {native_name}\n");
+    std::fs::write(pack_dir.join("messages.ftl"), &source).expect("write language pack");
+    let hash = format!("{:x}", Sha256::digest(source.as_bytes()));
+    let manifest = serde_json::json!({
+        "schemaVersion": 1,
+        "type": "language",
+        "id": format!("test.{locale}"),
+        "locale": locale,
+        "nativeName": native_name,
+        "i18nApi": {
+            "min": api_min,
+            "max": api_max
+        },
+        "resources": [
+            {
+                "path": "messages.ftl",
+                "sha256": format!("sha256:{hash}")
+            }
+        ]
+    });
+    std::fs::write(
+        pack_dir.join("manifest.json"),
+        serde_json::to_vec_pretty(&manifest).expect("serialize manifest"),
+    )
+    .expect("write language pack manifest");
+}
+
+#[tokio::test]
+#[serial]
+async fn slash_language_opens_installed_pack_picker() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    for (directory, locale, native_name, api_min, api_max) in [
+        ("zh-CN", "zh-CN", "简体中文", 1, 1),
+        ("fr-FR", "fr-FR", "Français", 2, 3),
+    ] {
+        install_test_language_pack(
+            &chat.config.codex_home,
+            directory,
+            locale,
+            native_name,
+            api_min,
+            api_max,
+        );
+    }
+
+    chat.dispatch_command(SlashCommand::Language);
+
+    assert!(chat.bottom_pane.has_active_view());
+    assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+
+    let popup = render_bottom_popup(&chat, /*width*/ 88);
+    assert_chatwidget_snapshot!("slash_language_picker", popup);
+}
+
+#[tokio::test]
+#[serial]
+async fn slash_language_with_arg_saves_installed_locale() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    install_test_language_pack(
+        &chat.config.codex_home,
+        "zh-CN",
+        "zh-CN",
+        "简体中文",
+        /*api_min*/ 1,
+        /*api_max*/ 1,
+    );
+
+    chat.dispatch_command_with_args(SlashCommand::Language, "zh-CN".to_string(), Vec::new());
+
+    assert_eq!(
+        std::fs::read_to_string(chat.config.codex_home.join("ui-language"))
+            .expect("read language preference"),
+        "zh-CN\n"
+    );
+    assert_matches!(rx.try_recv(), Ok(AppEvent::InsertHistoryCell(_)));
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
 }
 
 #[tokio::test]
