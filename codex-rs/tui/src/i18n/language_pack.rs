@@ -130,6 +130,7 @@ pub(crate) fn normalized_requested_locale(input: &str) -> Option<String> {
     let alias = match trimmed.to_ascii_lowercase().as_str() {
         "english" => "en",
         "chinese" => "zh",
+        "zh-hans" => "zh-CN",
         _ => trimmed,
     };
     alias

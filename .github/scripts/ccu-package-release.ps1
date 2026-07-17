@@ -31,6 +31,28 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Assert-ChildPath {
+    param(
+        [Parameter(Mandatory)] [string]$Root,
+        [Parameter(Mandatory)] [string]$Candidate,
+        [Parameter(Mandatory)] [string]$Label
+    )
+
+    $resolvedRoot = [System.IO.Path]::GetFullPath($Root)
+    $resolvedCandidate = [System.IO.Path]::GetFullPath($Candidate)
+    $separator = [System.IO.Path]::DirectorySeparatorChar.ToString()
+    $rootPrefix = if ($resolvedRoot.EndsWith($separator, [System.StringComparison]::Ordinal)) {
+        $resolvedRoot
+    }
+    else {
+        "$resolvedRoot$separator"
+    }
+    if (-not $resolvedCandidate.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "$Label must stay inside the output directory: $resolvedCandidate"
+    }
+    return $resolvedCandidate
+}
+
 if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
     throw "Codex binary does not exist: $BinaryPath"
 }
@@ -45,10 +67,10 @@ $target = 'x86_64-pc-windows-msvc'
 $releaseTag = "ccu-rust-v$UpstreamVersion-r$Revision"
 $assetName = "codex-ccu-i18n-$UpstreamVersion-r$Revision-$target.zip"
 $outputRoot = [System.IO.Path]::GetFullPath($OutputDirectory)
-$stagingRoot = Join-Path $outputRoot 'staging'
+$stagingRoot = Assert-ChildPath -Root $outputRoot -Candidate (Join-Path $outputRoot 'staging') -Label 'Release staging directory'
 $packageRoot = Join-Path $stagingRoot 'package\bin'
-$assetPath = Join-Path $outputRoot $assetName
-$manifestPath = Join-Path $outputRoot 'ccu-fork-manifest.json'
+$assetPath = Assert-ChildPath -Root $outputRoot -Candidate (Join-Path $outputRoot $assetName) -Label 'Release asset'
+$manifestPath = Assert-ChildPath -Root $outputRoot -Candidate (Join-Path $outputRoot 'ccu-fork-manifest.json') -Label 'Release manifest'
 
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue
