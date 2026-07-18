@@ -1338,8 +1338,8 @@ const SHORTCUTS: &[ShortcutDescriptor] = &[
 
 #[cfg(test)]
 mod tests {
+    use super::super::status_line_style::fit_status_line_to_width;
     use super::*;
-    use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
     use crate::test_backend::VT100Backend;
     use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
@@ -1413,9 +1413,9 @@ mod tests {
                         props.mode,
                         FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft
                     ) {
-                    passive_status_line.as_ref().map(|line| {
-                        truncate_line_with_ellipsis_if_overflow(line.clone(), available_width)
-                    })
+                    passive_status_line
+                        .as_ref()
+                        .map(|line| fit_status_line_to_width(line.clone(), available_width))
                 } else {
                     None
                 };
@@ -1462,9 +1462,9 @@ mod tests {
                 if status_line_active
                     && let Some(max_left) = max_left_width_for_right(area, right_width)
                     && left_width > max_left
-                    && let Some(line) = passive_status_line.as_ref().map(|line| {
-                        truncate_line_with_ellipsis_if_overflow(line.clone(), max_left as usize)
-                    })
+                    && let Some(line) = passive_status_line
+                        .as_ref()
+                        .map(|line| fit_status_line_to_width(line.clone(), max_left as usize))
                 {
                     left_width = line.width() as u16;
                     truncated_status_line = Some(line);
