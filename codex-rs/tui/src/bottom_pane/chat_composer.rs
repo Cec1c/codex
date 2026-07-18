@@ -210,6 +210,7 @@ use super::skill_popup::SkillPopup;
 use super::slash_commands::BuiltinCommandFlags;
 use super::slash_commands::ServiceTierCommand;
 use super::slash_commands::SlashCommandItem;
+use super::status_line_style::fit_status_line_to_width;
 use crate::bottom_pane::paste_burst::FlushResult;
 use crate::history_cell::sanitize_user_text;
 use crate::key_hint::KeyBindingListExt;
@@ -4286,9 +4287,9 @@ impl ChatComposer {
                         None
                     };
                     let mut truncated_status_line = if status_line_active {
-                        combined_status_line.as_ref().map(|line| {
-                            truncate_line_with_ellipsis_if_overflow(line.clone(), available_width)
-                        })
+                        combined_status_line
+                            .as_ref()
+                            .map(|line| fit_status_line_to_width(line.clone(), available_width))
                     } else {
                         None
                     };
@@ -4341,9 +4342,9 @@ impl ChatComposer {
                     if status_line_active
                         && let Some(max_left) = max_left_width_for_right(hint_rect, right_width)
                         && left_width > max_left
-                        && let Some(line) = combined_status_line.as_ref().map(|line| {
-                            truncate_line_with_ellipsis_if_overflow(line.clone(), max_left as usize)
-                        })
+                        && let Some(line) = combined_status_line
+                            .as_ref()
+                            .map(|line| fit_status_line_to_width(line.clone(), max_left as usize))
                     {
                         left_width = line.width() as u16;
                         truncated_status_line = Some(line);
