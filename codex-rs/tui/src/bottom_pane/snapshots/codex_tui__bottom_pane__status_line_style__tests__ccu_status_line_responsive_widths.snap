@@ -1,0 +1,8 @@
+---
+source: tui/src/bottom_pane/status_line_style.rs
+expression: rendered
+---
+80: deepseek-v4-pro[1m] │ 0/1.0M │ [░░░░░░░░░░] 0% │ ⏱ 1s ⚡0s │ 17.96 CNY
+58: deepseek-v4-pro[1m] │ 0/1.0M │ [░░░░░░░░░░] 0% │ ⏱ 1s ⚡0s
+36: deepseek-v4-pro[1m] │ 0/1.0M
+16: deepseek-v4-pro…
