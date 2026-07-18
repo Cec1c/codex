@@ -135,7 +135,12 @@ impl Default for StatusSurfacePreviewData {
             values: BTreeMap::new(),
         };
         for item in StatusSurfacePreviewItem::iter() {
-            data.set_placeholder(item, item.placeholder());
+            let placeholder = if item == StatusSurfacePreviewItem::ModelWithReasoning {
+                crate::ccu_theme::format_status_line_model("gpt-5.2-codex", "medium", None)
+            } else {
+                item.placeholder().to_string()
+            };
+            data.set_placeholder(item, placeholder);
         }
         data
     }

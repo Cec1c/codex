@@ -103,40 +103,93 @@ struct CcuQuotaDocument {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CcuQuotaAccount {
+    #[serde(default)]
     plan: String,
-    remaining_percent: f64,
+    remaining_percent: Option<f64>,
     weight: Option<f64>,
+    balance: Option<f64>,
+    currency: Option<String>,
 }
 
-fn configured_ccu_quota_percent() -> Option<u8> {
+#[derive(Debug, PartialEq)]
+pub(super) struct CcuQuotaSummary {
+    pub(super) balance: Option<(f64, String)>,
+    pub(super) remaining_percent: Option<u8>,
+}
+
+fn configured_ccu_quota() -> Option<CcuQuotaSummary> {
     let path = std::env::var_os("CODEX_CCU_QUOTA_PATH")?;
     let source = fs::read_to_string(path).ok()?;
-    let document: CcuQuotaDocument = serde_json::from_str(&source).ok()?;
+    parse_ccu_quota(&source)
+}
+
+pub(super) fn parse_ccu_quota(source: &str) -> Option<CcuQuotaSummary> {
+    let document: CcuQuotaDocument = serde_json::from_str(source).ok()?;
     let mut weighted_remaining = 0.0;
     let mut total_weight = 0.0;
+    let mut balance = 0.0;
+    let mut balance_currency = None::<String>;
+    let mut balance_is_usable = true;
+    let mut has_balance = false;
     for account in document.accounts {
-        if !account.remaining_percent.is_finite()
-            || !(0.0..=100.0).contains(&account.remaining_percent)
-        {
-            continue;
-        }
-        let weight = account.weight.unwrap_or_else(|| {
-            if account.plan.eq_ignore_ascii_case("pro20x") {
-                20.0
-            } else {
-                1.0
+        if let Some(account_balance) = account.balance {
+            let currency = account
+                .currency
+                .as_deref()
+                .map(str::trim)
+                .filter(|currency| !currency.is_empty() && currency.len() <= 12)
+                .unwrap_or("credits");
+            if account_balance.is_finite() && account_balance >= 0.0 {
+                if balance_currency
+                    .as_deref()
+                    .is_some_and(|existing| !existing.eq_ignore_ascii_case(currency))
+                {
+                    balance_is_usable = false;
+                } else {
+                    balance_currency.get_or_insert_with(|| {
+                        if currency.eq_ignore_ascii_case("credits") {
+                            "credits".to_string()
+                        } else {
+                            currency.to_uppercase()
+                        }
+                    });
+                    balance += account_balance;
+                    has_balance = true;
+                }
             }
-        });
-        if !weight.is_finite() || weight <= 0.0 {
-            continue;
         }
-        weighted_remaining += account.remaining_percent * weight;
-        total_weight += weight;
+
+        if let Some(remaining_percent) = account.remaining_percent
+            && remaining_percent.is_finite()
+            && (0.0..=100.0).contains(&remaining_percent)
+        {
+            let weight = account.weight.unwrap_or_else(|| {
+                if account.plan.eq_ignore_ascii_case("pro20x") {
+                    20.0
+                } else {
+                    1.0
+                }
+            });
+            if weight.is_finite() && weight > 0.0 {
+                weighted_remaining += remaining_percent * weight;
+                total_weight += weight;
+            }
+        }
     }
-    (total_weight > 0.0).then(|| {
+    let balance = (has_balance && balance_is_usable).then(|| {
+        (
+            balance,
+            balance_currency.unwrap_or_else(|| "credits".to_string()),
+        )
+    });
+    let remaining_percent = (total_weight > 0.0).then(|| {
         (weighted_remaining / total_weight)
             .round()
             .clamp(0.0, 100.0) as u8
+    });
+    (balance.is_some() || remaining_percent.is_some()).then_some(CcuQuotaSummary {
+        balance,
+        remaining_percent,
     })
 }
 
@@ -711,7 +764,9 @@ impl ChatWidget {
     pub(super) fn status_line_value_for_item(&mut self, item: StatusLineItem) -> Option<String> {
         match item {
             StatusLineItem::ModelName => Some(self.model_display_name().to_string()),
-            StatusLineItem::ModelWithReasoning => Some(self.model_with_reasoning_display_name()),
+            StatusLineItem::ModelWithReasoning => {
+                Some(self.status_line_model_with_reasoning_display_name())
+            }
             StatusLineItem::Reasoning => Some(self.reasoning_display_name()),
             StatusLineItem::CurrentDir => {
                 Some(format_directory_display(
@@ -804,7 +859,17 @@ impl ChatWidget {
                 ))
             }
             StatusLineItem::Quota => {
-                if let Some(percent) = configured_ccu_quota_percent() {
+                let configured = configured_ccu_quota();
+                if let Some((balance, currency)) = configured
+                    .as_ref()
+                    .and_then(|summary| summary.balance.as_ref())
+                {
+                    return Some(format!("{balance:.2} {currency}"));
+                }
+                if let Some(credits) = self.status_line_credit_balance() {
+                    return Some(credits);
+                }
+                if let Some(percent) = configured.and_then(|summary| summary.remaining_percent) {
                     return Some(crate::i18n::global().text_with_string_arg(
                         "status-line-quota-remaining",
                         "percent",
@@ -838,15 +903,7 @@ impl ChatWidget {
                         || format!("Quota {percent}%"),
                     ));
                 }
-                let credits = self
-                    .rate_limit_snapshots_by_limit_id
-                    .values()
-                    .filter_map(|snapshot| snapshot.credits.as_ref())
-                    .filter_map(|credits| credits.balance.as_deref())
-                    .filter_map(|balance| balance.trim().parse::<f64>().ok())
-                    .filter(|balance| balance.is_finite() && *balance >= 0.0)
-                    .sum::<f64>();
-                (credits > 0.0).then(|| format!("{credits:.2} credits"))
+                None
             }
             StatusLineItem::FiveHourLimit => {
                 let (window, is_secondary) = self
@@ -1025,8 +1082,25 @@ impl ChatWidget {
 
     fn model_with_reasoning_display_name(&self) -> String {
         let label = self.reasoning_display_name();
-        let service_tier_label = self
-            .current_service_tier()
+        let service_tier_label = self.model_service_tier_display_name();
+        service_tier_label.map_or_else(
+            || format!("{} {label}", self.model_display_name()),
+            |service_tier| format!("{} {label} {service_tier}", self.model_display_name()),
+        )
+    }
+
+    fn status_line_model_with_reasoning_display_name(&self) -> String {
+        let reasoning = self.reasoning_display_name();
+        let service_tier = self.model_service_tier_display_name();
+        crate::ccu_theme::format_status_line_model(
+            self.model_display_name(),
+            &reasoning,
+            service_tier.as_deref(),
+        )
+    }
+
+    fn model_service_tier_display_name(&self) -> Option<String> {
+        self.current_service_tier()
             .and_then(|service_tier| {
                 self.current_model_service_tier_commands()
                     .into_iter()
@@ -1034,9 +1108,36 @@ impl ChatWidget {
                     .map(|tier| tier.name)
             })
             .filter(|_| self.has_chatgpt_account)
-            .map(|tier| format!(" {tier}"))
-            .unwrap_or_default();
-        format!("{} {label}{service_tier_label}", self.model_display_name())
+    }
+
+    pub(super) fn status_line_credit_balance(&self) -> Option<String> {
+        let snapshots = self
+            .rate_limit_snapshots_by_limit_id
+            .get("codex")
+            .into_iter()
+            .chain(
+                self.rate_limit_snapshots_by_limit_id
+                    .values()
+                    .filter(|snapshot| snapshot.limit_name != "codex"),
+            );
+        for credits in snapshots.filter_map(|snapshot| snapshot.credits.as_ref()) {
+            if credits.unlimited {
+                return Some("∞ credits".to_string());
+            }
+            if !credits.has_credits {
+                continue;
+            }
+            let Some(value) = credits
+                .balance
+                .as_deref()
+                .and_then(|value| value.trim().parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value >= 0.0)
+            else {
+                continue;
+            };
+            return Some(format!("{value:.2} credits"));
+        }
+        None
     }
 
     /// Computes the compact runtime status label used by word-based status items.

@@ -7,6 +7,8 @@ use ratatui::style::Color;
 use ratatui::style::Style;
 use serde::Deserialize;
 
+use crate::terminal_palette::best_color;
+
 const DEFAULT_THEME_ID: &str = "ccu.deepseek";
 
 #[derive(Clone, Debug, Deserialize)]
@@ -27,7 +29,17 @@ struct StatusLineTheme {
     progress_width: usize,
     filled: String,
     empty: String,
+    #[serde(default)]
+    model_reasoning_style: ModelReasoningStyle,
     colors: StatusLineColors,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+enum ModelReasoningStyle {
+    #[default]
+    Spaced,
+    Bracketed,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -106,7 +118,7 @@ fn load_theme() -> Option<CcuTheme> {
         &document.welcome.path,
         &document.welcome.permissions,
     ] {
-        parse_color(value)?;
+        parse_rgb(value)?;
     }
     Some(CcuTheme {
         status_line: document.status_line,
@@ -122,11 +134,7 @@ fn is_safe_id(value: &str) -> bool {
         })
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "CCU theme packs intentionally expose exact RGB colors"
-)]
-fn parse_color(value: &str) -> Option<Color> {
+fn parse_rgb(value: &str) -> Option<(u8, u8, u8)> {
     let hex = value.strip_prefix('#')?;
     if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return None;
@@ -134,7 +142,37 @@ fn parse_color(value: &str) -> Option<Color> {
     let red = u8::from_str_radix(&hex[0..2], 16).ok()?;
     let green = u8::from_str_radix(&hex[2..4], 16).ok()?;
     let blue = u8::from_str_radix(&hex[4..6], 16).ok()?;
-    Some(Color::Rgb(red, green, blue))
+    Some((red, green, blue))
+}
+
+fn theme_color(value: &str) -> Option<Color> {
+    theme_color_with(value, best_color)
+}
+
+fn theme_color_with(value: &str, resolve: impl FnOnce((u8, u8, u8)) -> Color) -> Option<Color> {
+    let color = resolve(parse_rgb(value)?);
+    (color != Color::Reset).then_some(color)
+}
+
+fn format_model_reasoning(
+    style: ModelReasoningStyle,
+    model: &str,
+    reasoning: &str,
+    service_tier: Option<&str>,
+) -> String {
+    match style {
+        ModelReasoningStyle::Spaced => service_tier.map_or_else(
+            || format!("{model} {reasoning}"),
+            |service_tier| format!("{model} {reasoning} {service_tier}"),
+        ),
+        ModelReasoningStyle::Bracketed => {
+            let labels = service_tier.map_or_else(
+                || reasoning.to_string(),
+                |service_tier| format!("{reasoning},{service_tier}"),
+            );
+            format!("{model}[{labels}]")
+        }
+    }
 }
 
 impl CcuTheme {
@@ -152,7 +190,7 @@ impl CcuTheme {
             "separator" => &self.status_line.colors.separator,
             _ => return None,
         };
-        parse_color(value).map(|color| Style::default().fg(color))
+        theme_color(value).map(|color| Style::default().fg(color))
     }
 
     pub(crate) fn welcome_style(&self, role: &str) -> Option<Style> {
@@ -165,7 +203,7 @@ impl CcuTheme {
             "permissions" => &self.welcome.permissions,
             _ => return None,
         };
-        parse_color(value).map(|color| Style::default().fg(color))
+        theme_color(value).map(|color| Style::default().fg(color))
     }
 
     pub(crate) fn progress(&self, used_percent: u8) -> String {
@@ -180,6 +218,31 @@ impl CcuTheme {
             used_percent
         )
     }
+
+    fn format_model_with_reasoning(
+        &self,
+        model: &str,
+        reasoning: &str,
+        service_tier: Option<&str>,
+    ) -> String {
+        format_model_reasoning(
+            self.status_line.model_reasoning_style,
+            model,
+            reasoning,
+            service_tier,
+        )
+    }
+}
+
+pub(crate) fn format_status_line_model(
+    model: &str,
+    reasoning: &str,
+    service_tier: Option<&str>,
+) -> String {
+    active().map_or_else(
+        || format_model_reasoning(ModelReasoningStyle::Spaced, model, reasoning, service_tier),
+        |theme| theme.format_model_with_reasoning(model, reasoning, service_tier),
+    )
 }
 
 pub(crate) fn render_progress(used_percent: u8) -> String {
@@ -203,13 +266,53 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the theme parser contract must preserve exact RGB values"
-    )]
     fn parses_rgb_colors() {
-        assert_eq!(parse_color("#5eead4"), Some(Color::Rgb(94, 234, 212)));
-        assert_eq!(parse_color("cyan"), None);
+        assert_eq!(parse_rgb("#5eead4"), Some((94, 234, 212)));
+        assert_eq!(parse_rgb("cyan"), None);
+    }
+
+    #[test]
+    fn formats_compact_model_reasoning_labels() {
+        assert_eq!(
+            format_model_reasoning(
+                ModelReasoningStyle::Bracketed,
+                "deepseek-v4-pro",
+                "1m",
+                None,
+            ),
+            "deepseek-v4-pro[1m]"
+        );
+        assert_eq!(
+            format_model_reasoning(
+                ModelReasoningStyle::Bracketed,
+                "gpt-5.4",
+                "xhigh",
+                Some("fast"),
+            ),
+            "gpt-5.4[xhigh,fast]"
+        );
+    }
+
+    #[test]
+    fn theme_colors_fall_back_when_the_terminal_has_no_rich_color_support() {
+        assert_eq!(
+            theme_color_with("#5eead4", |rgb| {
+                crate::terminal_palette::best_color_for_level(
+                    rgb,
+                    crate::terminal_palette::StdoutColorLevel::Ansi16,
+                )
+            }),
+            None
+        );
+        assert!(matches!(
+            theme_color_with("#5eead4", |rgb| {
+                crate::terminal_palette::best_color_for_level(
+                    rgb,
+                    crate::terminal_palette::StdoutColorLevel::Ansi256,
+                )
+            }),
+            Some(Color::Indexed(_))
+        ));
     }
 
     #[test]

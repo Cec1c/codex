@@ -112,7 +112,7 @@ pub(crate) enum StatusLineItem {
     /// Total session elapsed time and active turn elapsed time.
     SessionTiming,
 
-    /// Aggregated remaining quota or available credits.
+    /// Available balance when known, otherwise aggregated remaining quota.
     Quota,
 
     /// Remaining usage on the primary rate limit.
@@ -191,7 +191,7 @@ impl StatusLineItem {
                 "Session elapsed time and current active-turn elapsed time"
             }
             StatusLineItem::Quota => {
-                "Aggregated quota remaining or credits; supports weighted CCU account metadata"
+                "Available balance first, then aggregated quota; supports weighted CCU accounts"
             }
             StatusLineItem::FiveHourLimit => {
                 "Remaining usage on the primary usage limit (omitted when unavailable)"
