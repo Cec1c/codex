@@ -6,12 +6,6 @@
 
 use super::*;
 
-#[derive(Clone, Copy)]
-pub(super) enum ThreadAttachPresentation {
-    SessionLineage,
-    PromptEdit,
-}
-
 fn session_text(key: &str, english: &'static str) -> String {
     crate::i18n::global().text(key, None, || english.to_string())
 }

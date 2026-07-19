@@ -899,7 +899,6 @@ async fn status_line_credit_balance_uses_real_balance_before_percent_fallbacks()
         }),
         individual_limit: None,
         plan_type: None,
-        spend_control_reached: None,
         rate_limit_reached_type: None,
     }));
     chat.on_rate_limit_snapshot(Some(RateLimitSnapshot {
@@ -914,7 +913,6 @@ async fn status_line_credit_balance_uses_real_balance_before_percent_fallbacks()
         }),
         individual_limit: None,
         plan_type: None,
-        spend_control_reached: None,
         rate_limit_reached_type: None,
     }));
 
