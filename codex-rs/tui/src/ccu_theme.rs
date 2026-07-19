@@ -2,6 +2,8 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use codex_utils_home_dir::find_codex_home;
 use ratatui::style::Color;
@@ -10,7 +12,8 @@ use serde::Deserialize;
 
 use crate::terminal_palette::best_color;
 
-const DEFAULT_THEME_ID: &str = "ccu.deepseek";
+const DEFAULT_THEME_ID: &str = "ccu.hermes";
+const LEGACY_THEME_ID: &str = "ccu.deepseek";
 const STATUS_LINE_PRESET_FILE: &str = "ui-statusline-preset";
 
 #[derive(Clone, Debug, Deserialize)]
@@ -31,6 +34,10 @@ struct StatusLineTheme {
     progress_width: usize,
     filled: String,
     empty: String,
+    #[serde(default)]
+    model_emojis: Vec<String>,
+    #[serde(default)]
+    palette: Vec<String>,
     #[serde(default)]
     model_reasoning_style: ModelReasoningStyle,
     colors: StatusLineColors,
@@ -68,6 +75,7 @@ struct WelcomeTheme {
 pub(crate) struct CcuTheme {
     status_line: StatusLineTheme,
     welcome: WelcomeTheme,
+    model_emoji: Option<String>,
 }
 
 static THEME: OnceLock<Option<CcuTheme>> = OnceLock::new();
@@ -79,7 +87,7 @@ pub(crate) fn active() -> Option<&'static CcuTheme> {
 pub(crate) fn status_line_preset_enabled(codex_home: &Path) -> bool {
     fs::read_to_string(codex_home.join(STATUS_LINE_PRESET_FILE))
         .ok()
-        .is_some_and(|value| value.trim() == DEFAULT_THEME_ID)
+        .is_some_and(|value| matches!(value.trim(), DEFAULT_THEME_ID | LEGACY_THEME_ID))
 }
 
 fn load_theme() -> Option<CcuTheme> {
@@ -87,6 +95,7 @@ fn load_theme() -> Option<CcuTheme> {
     let theme_id = std::env::var("CODEX_CCU_THEME")
         .ok()
         .filter(|value| !value.trim().is_empty())
+        .or_else(|| status_line_preset_enabled(&codex_home).then(|| DEFAULT_THEME_ID.to_string()))
         .or_else(|| {
             fs::read_to_string(codex_home.join("ui-theme"))
                 .ok()
@@ -101,7 +110,7 @@ fn load_theme() -> Option<CcuTheme> {
         .map(PathBuf::from)
         .unwrap_or_else(|| codex_home.join("ccu").join("themes").to_path_buf());
     let source = fs::read_to_string(root.join(&theme_id).join("theme.json")).ok()?;
-    let document: ThemeDocument = serde_json::from_str(&source).ok()?;
+    let mut document: ThemeDocument = serde_json::from_str(&source).ok()?;
     if document.schema_version != 1
         || document.kind != "theme"
         || document.id != theme_id
@@ -128,10 +137,70 @@ fn load_theme() -> Option<CcuTheme> {
     ] {
         parse_rgb(value)?;
     }
+    for value in &document.status_line.palette {
+        parse_rgb(value)?;
+    }
+    if document.status_line.model_emojis.iter().any(|emoji| {
+        emoji.is_empty() || emoji.chars().count() > 8 || emoji.chars().any(char::is_control)
+    }) {
+        return None;
+    }
+    let seed = session_seed();
+    apply_palette(
+        &mut document.status_line.colors,
+        &document.status_line.palette,
+        seed,
+    );
+    let model_emoji = select_model_emoji(&document.status_line.model_emojis, seed);
     Some(CcuTheme {
         status_line: document.status_line,
         welcome: document.welcome,
+        model_emoji,
     })
+}
+
+fn session_seed() -> u64 {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    nanos ^ u64::from(std::process::id())
+}
+
+fn next_random(state: &mut u64) -> u64 {
+    if *state == 0 {
+        *state = 0x9e37_79b9_7f4a_7c15;
+    }
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    *state
+}
+
+fn shuffled_palette(palette: &[String], mut seed: u64) -> Vec<String> {
+    let mut colors = palette.to_vec();
+    for index in (1..colors.len()).rev() {
+        let swap_index = (next_random(&mut seed) as usize) % (index + 1);
+        colors.swap(index, swap_index);
+    }
+    colors
+}
+
+fn apply_palette(colors: &mut StatusLineColors, palette: &[String], seed: u64) {
+    let shuffled = shuffled_palette(palette, seed);
+    if shuffled.len() < 6 {
+        return;
+    }
+    colors.model = shuffled[0].clone();
+    colors.separator = shuffled[1].clone();
+    colors.usage = shuffled[2].clone();
+    colors.progress = shuffled[3].clone();
+    colors.time = shuffled[4].clone();
+    colors.quota = shuffled[5].clone();
+}
+
+fn select_model_emoji(emojis: &[String], seed: u64) -> Option<String> {
+    (!emojis.is_empty()).then(|| emojis[(seed as usize) % emojis.len()].clone())
 }
 
 fn is_safe_id(value: &str) -> bool {
@@ -233,12 +302,15 @@ impl CcuTheme {
         reasoning: &str,
         service_tier: Option<&str>,
     ) -> String {
-        format_model_reasoning(
+        let label = format_model_reasoning(
             self.status_line.model_reasoning_style,
             model,
             reasoning,
             service_tier,
-        )
+        );
+        self.model_emoji
+            .as_deref()
+            .map_or(label.clone(), |emoji| format!("{emoji} {label}"))
     }
 }
 
@@ -282,13 +354,8 @@ mod tests {
     #[test]
     fn formats_compact_model_reasoning_labels() {
         assert_eq!(
-            format_model_reasoning(
-                ModelReasoningStyle::Bracketed,
-                "deepseek-v4-pro",
-                "1m",
-                None,
-            ),
-            "deepseek-v4-pro[1m]"
+            format_model_reasoning(ModelReasoningStyle::Bracketed, "gpt-5.6-sol", "xhigh", None,),
+            "gpt-5.6-sol[xhigh]"
         );
         assert_eq!(
             format_model_reasoning(
@@ -298,6 +365,25 @@ mod tests {
                 Some("fast"),
             ),
             "gpt-5.4[xhigh,fast]"
+        );
+    }
+
+    #[test]
+    fn session_seed_selects_a_stable_emoji_and_palette_order() {
+        let emojis = vec!["🦊".to_string(), "🚀".to_string(), "🌈".to_string()];
+        assert_eq!(select_model_emoji(&emojis, 4).as_deref(), Some("🚀"));
+
+        let palette = vec![
+            "#F5E0DC".to_string(),
+            "#F2CDCD".to_string(),
+            "#F5C2E7".to_string(),
+            "#FAB387".to_string(),
+            "#F9E2AF".to_string(),
+            "#A6E3A1".to_string(),
+        ];
+        assert_eq!(
+            shuffled_palette(&palette, 42),
+            shuffled_palette(&palette, 42)
         );
     }
 
@@ -336,9 +422,16 @@ mod tests {
 
         fs::write(
             codex_home.path().join(STATUS_LINE_PRESET_FILE),
-            "ccu.deepseek\n",
+            "ccu.hermes\n",
         )
         .expect("write CCU status-line preference");
+        assert!(status_line_preset_enabled(codex_home.path()));
+
+        fs::write(
+            codex_home.path().join(STATUS_LINE_PRESET_FILE),
+            "ccu.deepseek\n",
+        )
+        .expect("write legacy CCU status-line preference");
         assert!(status_line_preset_enabled(codex_home.path()));
 
         fs::write(
