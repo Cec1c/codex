@@ -39,12 +39,12 @@ impl MentionType {
         format!("{:<width$}", self.label(), width = TAG_WIDTH).set_style(style)
     }
 
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::Plugin => "Plugin",
-            Self::Skill => "Skill",
-            Self::File => "File",
-            Self::Directory => "Dir",
+            Self::Plugin => super::i18n::text("mention-type-plugin", "Plugin"),
+            Self::Skill => super::i18n::text("mention-type-skill", "Skill"),
+            Self::File => super::i18n::text("mention-type-file", "File"),
+            Self::Directory => super::i18n::text("mention-type-directory", "Dir"),
         }
     }
 }

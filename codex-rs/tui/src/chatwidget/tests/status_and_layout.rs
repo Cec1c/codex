@@ -83,7 +83,6 @@ async fn ccu_status_line_preset_is_optional_and_explicit_config_wins() {
             "context-tokens",
             "context-progress",
             "session-timing",
-            "quota",
         ]
     );
 
