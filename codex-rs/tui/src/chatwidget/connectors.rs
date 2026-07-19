@@ -3,6 +3,19 @@
 use super::*;
 use crate::app_event::ConnectorsSnapshot;
 
+fn connectors_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+fn connectors_count_text(installed: usize, total: usize) -> String {
+    let mut args = fluent_bundle::FluentArgs::new();
+    args.set("installed", installed.to_string());
+    args.set("total", total.to_string());
+    crate::i18n::global().text("apps-installed-count", Some(&args), || {
+        format!("Installed {installed} of {total} available apps.")
+    })
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) enum ConnectorsCacheState {
     #[default]
@@ -76,8 +89,11 @@ impl ChatWidget {
     pub(crate) fn add_connectors_output(&mut self) {
         if !self.connectors_enabled() {
             self.add_info_message(
-                "Apps are disabled.".to_string(),
-                Some("Enable the apps feature to use $ or /apps.".to_string()),
+                connectors_text("apps-disabled", "Apps are disabled."),
+                Some(connectors_text(
+                    "apps-enable-hint",
+                    "Enable the apps feature to use $ or /apps.",
+                )),
             );
             return;
         }
@@ -90,7 +106,10 @@ impl ChatWidget {
         match connectors_cache {
             ConnectorsCacheState::Ready(snapshot) => {
                 if snapshot.connectors.is_empty() {
-                    self.add_info_message("No apps available.".to_string(), /*hint*/ None);
+                    self.add_info_message(
+                        connectors_text("apps-none-available", "No apps available."),
+                        /*hint*/ None,
+                    );
                 } else {
                     self.open_connectors_popup(&snapshot.connectors);
                 }
@@ -123,15 +142,24 @@ impl ChatWidget {
 
     fn connectors_loading_popup_params(&self) -> SelectionViewParams {
         let mut header = ColumnRenderable::new();
-        header.push(Line::from("Apps".bold()));
-        header.push(Line::from("Loading installed and available apps...".dim()));
+        header.push(Line::from(connectors_text("apps-title", "Apps").bold()));
+        header.push(Line::from(
+            connectors_text(
+                "apps-loading-subtitle",
+                "Loading installed and available apps...",
+            )
+            .dim(),
+        ));
 
         SelectionViewParams {
             view_id: Some(CONNECTORS_SELECTION_VIEW_ID),
             header: Box::new(header),
             items: vec![SelectionItem {
-                name: "Loading apps...".to_string(),
-                description: Some("This updates when the full list is ready.".to_string()),
+                name: connectors_text("apps-loading", "Loading apps..."),
+                description: Some(connectors_text(
+                    "apps-loading-description",
+                    "This updates when the full list is ready.",
+                )),
                 is_disabled: true,
                 ..Default::default()
             }],
@@ -150,13 +178,15 @@ impl ChatWidget {
             .filter(|connector| connector.is_accessible)
             .count();
         let mut header = ColumnRenderable::new();
-        header.push(Line::from("Apps".bold()));
+        header.push(Line::from(connectors_text("apps-title", "Apps").bold()));
         header.push(Line::from(
-            "Use $ to insert an installed app into your prompt.".dim(),
+            connectors_text(
+                "apps-insert-hint",
+                "Use $ to insert an installed app into your prompt.",
+            )
+            .dim(),
         ));
-        header.push(Line::from(
-            format!("Installed {installed} of {total} available apps.").dim(),
-        ));
+        header.push(Line::from(connectors_count_text(installed, total).dim()));
         let initial_selected_idx = selected_connector_id.and_then(|selected_connector_id| {
             connectors
                 .iter()
@@ -178,23 +208,47 @@ impl ChatWidget {
             };
             let is_installed = connector.is_accessible;
             let selected_label = if is_installed {
-                format!(
-                    "{status_label}. Press Enter to open the app page to install, manage, or enable/disable this app."
+                crate::i18n::global().text_with_string_arg(
+                    "apps-selected-installed",
+                    "status",
+                    status_label.clone(),
+                    || {
+                        format!(
+                            "{status_label}. Press Enter to open the app page to install, manage, or enable/disable this app."
+                        )
+                    },
                 )
             } else {
-                format!("{status_label}. Press Enter to open the app page to install this app.")
+                crate::i18n::global().text_with_string_arg(
+                    "apps-selected-installable",
+                    "status",
+                    status_label.clone(),
+                    || {
+                        format!(
+                            "{status_label}. Press Enter to open the app page to install this app."
+                        )
+                    },
+                )
             };
-            let missing_label = format!("{status_label}. App link unavailable.");
+            let missing_label = crate::i18n::global().text_with_string_arg(
+                "apps-link-unavailable",
+                "status",
+                status_label.clone(),
+                || format!("{status_label}. App link unavailable."),
+            );
             let instructions = if connector.is_accessible {
-                "Manage this app in your browser."
+                connectors_text("apps-manage-browser", "Manage this app in your browser.")
             } else {
-                "Install this app in your browser, then reload Codex."
+                connectors_text(
+                    "apps-install-browser",
+                    "Install this app in your browser, then reload Codex.",
+                )
             };
             if let Some(install_url) = connector.install_url.clone() {
                 let app_id = connector.id.clone();
                 let is_enabled = connector.is_enabled;
                 let title = connector_title.clone();
-                let instructions = instructions.to_string();
+                let instructions = instructions.clone();
                 let description = link_description.clone();
                 item.actions = vec![Box::new(move |tx| {
                     tx.send(AppEvent::OpenAppLink {
@@ -231,7 +285,10 @@ impl ChatWidget {
             footer_hint: Some(self.bottom_pane.standard_popup_hint_line()),
             items,
             is_searchable: true,
-            search_placeholder: Some("Type to search apps".to_string()),
+            search_placeholder: Some(connectors_text(
+                "apps-search-placeholder",
+                "Type to search apps",
+            )),
             col_width_mode: ColumnWidthMode::AutoAllRows,
             initial_selected_idx,
             ..Default::default()
@@ -266,15 +323,15 @@ impl ChatWidget {
         }
     }
 
-    fn connector_status_label(connector: &AppInfo) -> &'static str {
+    fn connector_status_label(connector: &AppInfo) -> String {
         if connector.is_accessible {
             if connector.is_enabled {
-                "Installed"
+                connectors_text("apps-status-installed", "Installed")
             } else {
-                "Installed · Disabled"
+                connectors_text("apps-status-disabled", "Installed · Disabled")
             }
         } else {
-            "Can be installed"
+            connectors_text("apps-status-installable", "Can be installed")
         }
     }
 

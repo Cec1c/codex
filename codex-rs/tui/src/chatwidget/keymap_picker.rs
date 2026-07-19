@@ -38,7 +38,12 @@ impl ChatWidget {
                 self.bottom_pane.show_selection_view(params);
             }
             Err(err) => {
-                self.add_error_message(format!("Invalid `tui.keymap` configuration: {err}"));
+                self.add_error_message(crate::i18n::global().text_with_string_arg(
+                    "slash-keymap-invalid-config",
+                    "error",
+                    err.to_string(),
+                    || format!("Invalid `tui.keymap` configuration: {err}"),
+                ));
             }
         }
     }

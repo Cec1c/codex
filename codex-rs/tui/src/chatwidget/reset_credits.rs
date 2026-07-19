@@ -10,6 +10,11 @@ use std::collections::BTreeMap;
 
 use super::rate_limits::get_limits_duration;
 
+fn reset_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+#[derive(Clone, Copy)]
 pub(super) enum RateLimitResetScope {
     Monthly,
     WeeklyAndFiveHour,
@@ -17,19 +22,31 @@ pub(super) enum RateLimitResetScope {
 }
 
 impl RateLimitResetScope {
-    pub(super) fn picker_label(&self) -> &'static str {
+    pub(super) fn picker_label(&self) -> String {
         match self {
-            Self::Monthly => "Full reset (Monthly)",
-            Self::WeeklyAndFiveHour => "Full reset (Weekly + 5h)",
-            Self::Unknown => "Full reset",
+            Self::Monthly => reset_text("usage-reset-scope-monthly", "Full reset (Monthly)"),
+            Self::WeeklyAndFiveHour => reset_text(
+                "usage-reset-scope-weekly-five-hour",
+                "Full reset (Weekly + 5h)",
+            ),
+            Self::Unknown => reset_text("usage-reset-scope-full", "Full reset"),
         }
     }
 
-    pub(super) fn usage_description(&self) -> &'static str {
+    pub(super) fn usage_description(&self) -> String {
         match self {
-            Self::Monthly => "Reset your current monthly usage limit.",
-            Self::WeeklyAndFiveHour => "Reset your current 5-hour and weekly usage limits.",
-            Self::Unknown => "Reset your current usage limits.",
+            Self::Monthly => reset_text(
+                "usage-reset-description-monthly",
+                "Reset your current monthly usage limit.",
+            ),
+            Self::WeeklyAndFiveHour => reset_text(
+                "usage-reset-description-weekly-five-hour",
+                "Reset your current 5-hour and weekly usage limits.",
+            ),
+            Self::Unknown => reset_text(
+                "usage-reset-description-full",
+                "Reset your current usage limits.",
+            ),
         }
     }
 }
@@ -90,20 +107,30 @@ pub(super) fn reset_credit_options(
             let expiration = match credit.expires_at {
                 Some(expires_at) => DateTime::<Utc>::from_timestamp(expires_at, 0)
                     .map(|expires_at| {
-                        format!(
-                            "Expires {}",
-                            expires_at
-                                .with_timezone(&Local)
-                                .format("%H:%M on %-d %b %Y")
+                        let expiration = expires_at
+                            .with_timezone(&Local)
+                            .format("%H:%M on %-d %b %Y")
+                            .to_string();
+                        crate::i18n::global().text_with_string_arg(
+                            "usage-reset-expires",
+                            "expiration",
+                            expiration.clone(),
+                            || format!("Expires {expiration}"),
                         )
                     })
-                    .unwrap_or_else(|| "Expiration unavailable".to_string()),
-                None => "Does not expire".to_string(),
+                    .unwrap_or_else(|| {
+                        reset_text(
+                            "usage-reset-expiration-unavailable",
+                            "Expiration unavailable",
+                        )
+                    }),
+                None => reset_text("usage-reset-does-not-expire", "Does not expire"),
             };
             let reset_label = credit
                 .title
                 .as_deref()
                 .filter(|title| !title.trim().is_empty())
+                .map(str::to_string)
                 .unwrap_or_else(|| match credit.reset_type {
                     RateLimitResetType::CodexRateLimits | RateLimitResetType::Unknown => {
                         scope.picker_label()
@@ -111,7 +138,7 @@ pub(super) fn reset_credit_options(
                 });
             ResetCreditOption {
                 credit_id: Some(credit.id.clone()),
-                name: reset_label.to_string(),
+                name: reset_label,
                 description: format!("{expiration}."),
             }
         })
@@ -120,8 +147,8 @@ pub(super) fn reset_credit_options(
     if options.is_empty() {
         options.push(ResetCreditOption {
             credit_id: None,
-            name: "Use a reset".to_string(),
-            description: scope.usage_description().to_string(),
+            name: reset_text("usage-use-reset", "Use a reset"),
+            description: scope.usage_description(),
         });
     }
 

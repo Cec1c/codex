@@ -12,6 +12,21 @@ pub(super) enum ThreadAttachPresentation {
     PromptEdit,
 }
 
+fn session_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+fn session_text_with_args<F>(key: &str, args: &[(&str, String)], english: F) -> String
+where
+    F: FnOnce() -> String,
+{
+    let mut fluent_args = fluent_bundle::FluentArgs::new();
+    for (name, value) in args {
+        fluent_args.set(*name, value.clone());
+    }
+    crate::i18n::global().text(key, Some(&fluent_args), english)
+}
+
 impl App {
     pub(super) async fn open_agent_picker(&mut self, app_server: &mut AppServerSession) {
         self.backfill_loaded_subagent_threads(app_server).await;
@@ -95,8 +110,10 @@ impl App {
         }
 
         if self.agent_navigation.is_empty() {
-            self.chat_widget
-                .add_info_message("No agents available yet.".to_string(), /*hint*/ None);
+            self.chat_widget.add_info_message(
+                session_text("agent-picker-empty", "No agents available yet."),
+                /*hint*/ None,
+            );
             return;
         }
 
@@ -134,7 +151,7 @@ impl App {
             .collect();
 
         self.chat_widget.show_selection_view(SelectionViewParams {
-            title: Some("Subagents".to_string()),
+            title: Some(session_text("agent-picker-title", "Subagents")),
             subtitle: Some(AgentNavigationState::picker_subtitle()),
             footer_hint: Some(standard_popup_hint_line()),
             items,
@@ -304,9 +321,17 @@ impl App {
                 if turns.is_empty() {
                     // A `thread/read` fallback without turns would create a blank local replay
                     // channel with no live listener attached, which blocks later real re-attach.
-                    return Err(color_eyre::eyre::eyre!(
-                        "Agent thread {thread_id} is not yet available for replay or live attach."
-                    ));
+                    let thread_id = thread_id.to_string();
+                    let message = session_text_with_args(
+                        "agent-thread-not-ready",
+                        &[("thread_id", thread_id.clone())],
+                        || {
+                            format!(
+                                "Agent thread {thread_id} is not yet available for replay or live attach."
+                            )
+                        },
+                    );
+                    return Err(color_eyre::eyre::eyre!(message));
                 }
                 let mut session = self.session_state_for_thread_read(thread_id, &thread).await;
                 // `thread/read` can seed replay state, but it does not attach the app-server
@@ -365,8 +390,12 @@ impl App {
             .refresh_agent_picker_thread_liveness(app_server, thread_id)
             .await
         {
-            self.chat_widget
-                .add_error_message(format!("Agent thread {thread_id} is no longer available."));
+            let thread_id = thread_id.to_string();
+            self.chat_widget.add_error_message(session_text_with_args(
+                "agent-thread-unavailable",
+                &[("thread_id", thread_id.clone())],
+                || format!("Agent thread {thread_id} is no longer available."),
+            ));
             return Ok(());
         }
 
@@ -387,15 +416,23 @@ impl App {
                     }
                 }
                 Err(err) => {
-                    self.chat_widget.add_error_message(format!(
-                        "Failed to attach to agent thread {thread_id}: {err}"
+                    let thread_id = thread_id.to_string();
+                    let error = err.to_string();
+                    self.chat_widget.add_error_message(session_text_with_args(
+                        "agent-thread-attach-failed",
+                        &[("thread_id", thread_id.clone()), ("error", error.clone())],
+                        || format!("Failed to attach to agent thread {thread_id}: {error}"),
                     ));
                     return Ok(());
                 }
             }
         } else if !self.thread_event_channels.contains_key(&thread_id) && is_replay_only {
-            self.chat_widget
-                .add_error_message(format!("Agent thread {thread_id} is no longer available."));
+            let thread_id = thread_id.to_string();
+            self.chat_widget.add_error_message(session_text_with_args(
+                "agent-thread-unavailable",
+                &[("thread_id", thread_id.clone())],
+                || format!("Agent thread {thread_id} is no longer available."),
+            ));
             return Ok(());
         }
 
@@ -404,8 +441,12 @@ impl App {
         self.active_thread_id = None;
         let Some((receiver, mut snapshot)) = self.activate_thread_for_replay(thread_id).await
         else {
-            self.chat_widget
-                .add_error_message(format!("Agent thread {thread_id} is already active."));
+            let thread_id = thread_id.to_string();
+            self.chat_widget.add_error_message(session_text_with_args(
+                "agent-thread-already-active",
+                &[("thread_id", thread_id.clone())],
+                || format!("Agent thread {thread_id} is already active."),
+            ));
             if let Some(previous_thread_id) = previous_thread_id {
                 self.activate_thread_channel(previous_thread_id).await;
             }
@@ -433,12 +474,23 @@ impl App {
         self.reset_for_thread_switch(tui)?;
         self.replay_thread_snapshot(snapshot, !is_replay_only);
         if is_replay_only {
+            let thread_id = thread_id.to_string();
             let message = if attached_replay_only {
-                format!(
-                    "Agent thread {thread_id} could not be resumed live. Replaying saved transcript."
+                session_text_with_args(
+                    "agent-thread-replay-fallback",
+                    &[("thread_id", thread_id.clone())],
+                    || {
+                        format!(
+                            "Agent thread {thread_id} could not be resumed live. Replaying saved transcript."
+                        )
+                    },
                 )
             } else {
-                format!("Agent thread {thread_id} is closed. Replaying saved transcript.")
+                session_text_with_args(
+                    "agent-thread-closed-replay",
+                    &[("thread_id", thread_id.clone())],
+                    || format!("Agent thread {thread_id} is closed. Replaying saved transcript."),
+                )
             };
             self.chat_widget.add_info_message(message, /*hint*/ None);
         }
@@ -524,9 +576,13 @@ impl App {
                 self.chat_widget.maybe_send_next_queued_input();
             }
             Err(err) => {
-                return Err(color_eyre::eyre::eyre!(
-                    "Failed to start a fresh session through the app server: {err}"
-                ));
+                let error = err.to_string();
+                let message = session_text_with_args(
+                    "session-start-failed",
+                    &[("error", error.clone())],
+                    || format!("Failed to start a fresh session through the app server: {error}"),
+                );
+                return Err(color_eyre::eyre::eyre!(message));
             }
         }
         Ok(())
@@ -582,8 +638,11 @@ impl App {
                     )
                     .await
                 {
-                    self.chat_widget.add_error_message(format!(
-                        "Failed to attach to fresh app-server thread: {err}"
+                    let error = err.to_string();
+                    self.chat_widget.add_error_message(session_text_with_args(
+                        "session-fresh-attach-failed",
+                        &[("error", error.clone())],
+                        || format!("Failed to attach to fresh app-server thread: {error}"),
                     ));
                 } else if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -591,15 +650,26 @@ impl App {
                         lines.push(usage_line.into());
                     }
                     if let Some(command) = summary.resume_hint {
-                        let spans = vec!["To continue this session, run ".into(), command.cyan()];
+                        let spans = vec![
+                            session_text(
+                                "session-continue-command-prefix",
+                                "To continue this session, run",
+                            )
+                            .into(),
+                            " ".into(),
+                            command.cyan(),
+                        ];
                         lines.push(spans.into());
                     }
                     self.chat_widget.add_plain_history_lines(lines);
                 }
             }
             Err(err) => {
-                self.chat_widget.add_error_message(format!(
-                    "Failed to start a fresh session through the app server: {err}"
+                let error = err.to_string();
+                self.chat_widget.add_error_message(session_text_with_args(
+                    "session-start-failed",
+                    &[("error", error.clone())],
+                    || format!("Failed to start a fresh session through the app server: {error}"),
                 ));
                 self.config.model = Some(model);
             }
@@ -786,8 +856,11 @@ impl App {
         {
             Ok(cfg) => cfg,
             Err(err) => {
-                self.chat_widget.add_error_message(format!(
-                    "Failed to rebuild configuration for resume: {err}"
+                let error = err.to_string();
+                self.chat_widget.add_error_message(session_text_with_args(
+                    "resume-config-rebuild-failed",
+                    &[("error", error.clone())],
+                    || format!("Failed to rebuild configuration for resume: {error}"),
                 ));
                 return Ok(AppRunControl::Continue);
             }
@@ -835,8 +908,15 @@ impl App {
                                 lines.push(usage_line.into());
                             }
                             if let Some(command) = summary.resume_hint {
-                                let spans =
-                                    vec!["To continue this session, run ".into(), command.cyan()];
+                                let spans = vec![
+                                    session_text(
+                                        "session-continue-command-prefix",
+                                        "To continue this session, run",
+                                    )
+                                    .into(),
+                                    " ".into(),
+                                    command.cyan(),
+                                ];
                                 lines.push(spans.into());
                             }
                             self.chat_widget.add_plain_history_lines(lines);
@@ -848,16 +928,22 @@ impl App {
                         .await;
                     }
                     Err(err) => {
-                        self.chat_widget.add_error_message(format!(
-                            "Failed to attach to resumed app-server thread: {err}"
+                        let error = err.to_string();
+                        self.chat_widget.add_error_message(session_text_with_args(
+                            "resume-attach-failed",
+                            &[("error", error.clone())],
+                            || format!("Failed to attach to resumed app-server thread: {error}"),
                         ));
                     }
                 }
             }
             Err(err) => {
                 let path_display = target_session.display_label();
-                self.chat_widget.add_error_message(format!(
-                    "Failed to resume session from {path_display}: {err}"
+                let error = err.to_string();
+                self.chat_widget.add_error_message(session_text_with_args(
+                    "resume-session-failed",
+                    &[("path", path_display.clone()), ("error", error.clone())],
+                    || format!("Failed to resume session from {path_display}: {error}"),
                 ));
             }
         }

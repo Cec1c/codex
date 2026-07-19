@@ -561,26 +561,48 @@ pub(crate) fn goal_status_indicator_line(
     let label = match indicator {
         GoalStatusIndicator::Active { usage } => {
             if let Some(usage) = usage {
-                format!("Pursuing goal ({usage})")
+                crate::i18n::global().text_with_string_arg(
+                    "footer-goal-active-with-usage",
+                    "usage",
+                    usage.clone(),
+                    || format!("Pursuing goal ({usage})"),
+                )
             } else {
-                "Pursuing goal".to_string()
+                footer_text("footer-goal-active", "Pursuing goal")
             }
         }
-        GoalStatusIndicator::Paused => "Goal paused (/goal resume)".to_string(),
-        GoalStatusIndicator::Blocked => "Goal blocked (/goal resume)".to_string(),
-        GoalStatusIndicator::UsageLimited => "Goal hit usage limits (/goal resume)".to_string(),
+        GoalStatusIndicator::Paused => {
+            footer_text("footer-goal-paused", "Goal paused (/goal resume)")
+        }
+        GoalStatusIndicator::Blocked => {
+            footer_text("footer-goal-blocked", "Goal blocked (/goal resume)")
+        }
+        GoalStatusIndicator::UsageLimited => footer_text(
+            "footer-goal-usage-limited",
+            "Goal hit usage limits (/goal resume)",
+        ),
         GoalStatusIndicator::BudgetLimited { usage } => {
             if let Some(usage) = usage {
-                format!("Goal unmet ({usage})")
+                crate::i18n::global().text_with_string_arg(
+                    "footer-goal-unmet-with-usage",
+                    "usage",
+                    usage.clone(),
+                    || format!("Goal unmet ({usage})"),
+                )
             } else {
-                "Goal abandoned".to_string()
+                footer_text("footer-goal-abandoned", "Goal abandoned")
             }
         }
         GoalStatusIndicator::Complete { usage } => {
             if let Some(usage) = usage {
-                format!("Goal achieved ({usage})")
+                crate::i18n::global().text_with_string_arg(
+                    "footer-goal-achieved-with-usage",
+                    "usage",
+                    usage.clone(),
+                    || format!("Goal achieved ({usage})"),
+                )
             } else {
-                "Goal achieved".to_string()
+                footer_text("footer-goal-achieved", "Goal achieved")
             }
         }
     };
@@ -596,7 +618,11 @@ pub(crate) fn status_line_right_indicator_line(
 ) -> Option<Line<'static>> {
     let primary_indicator = mode_indicator_line(collaboration_mode_indicator, show_cycle_hint)
         .or_else(|| goal_status_indicator_line(goal_status_indicator));
-    let ide_context_indicator = ide_context_active.then(|| Line::from(vec!["IDE context".cyan()]));
+    let ide_context_indicator = ide_context_active.then(|| {
+        Line::from(vec![
+            footer_text("footer-ide-context", "IDE context").cyan(),
+        ])
+    });
     let mut line: Option<Line<'static>> = None;
 
     for indicator in [primary_indicator, ide_context_indicator]
