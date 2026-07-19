@@ -642,7 +642,7 @@ impl App {
                 self.chat_widget.maybe_send_next_queued_input();
             }
             Err(err) => {
-                let error = err.to_string();
+                let error = err;
                 let message = session_text_with_args(
                     "session-start-failed",
                     &[("error", error.clone())],
