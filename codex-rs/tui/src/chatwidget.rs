@@ -474,6 +474,13 @@ const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it l
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_STATUS_LINE_ITEMS: [&str; 2] = ["model-with-reasoning", "current-dir"];
+const CCU_STATUS_LINE_ITEMS: [&str; 5] = [
+    "model-with-reasoning",
+    "context-tokens",
+    "context-progress",
+    "session-timing",
+    "quota",
+];
 const MAX_AGENT_COPY_HISTORY: usize = 32;
 
 /// Common initialization parameters shared by all `ChatWidget` constructors.
@@ -696,6 +703,8 @@ pub(crate) struct ChatWidget {
     session_network_proxy: Option<SessionNetworkProxyRuntime>,
     // Shared latch so we only warn once about invalid status-line item IDs.
     status_line_invalid_items_warned: Arc<AtomicBool>,
+    // Whether the optional CCU status-line preset was selected at startup.
+    ccu_status_line_preset_enabled: bool,
     // Shared latch so we only warn once about invalid terminal-title item IDs.
     terminal_title_invalid_items_warned: Arc<AtomicBool>,
     // Last terminal title emitted, to avoid writing duplicate OSC updates.

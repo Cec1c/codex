@@ -77,6 +77,8 @@ impl ChatWidget {
             &model_catalog.try_list_models().unwrap_or_default(),
         );
         let current_terminal_info = terminal_info();
+        let ccu_status_line_preset_enabled =
+            crate::ccu_theme::status_line_preset_enabled(&config.codex_home);
         let runtime_keymap = RuntimeKeymap::from_config(&config.tui_keymap).ok();
         let default_keymap = RuntimeKeymap::defaults();
         let copy_last_response_binding = runtime_keymap
@@ -223,6 +225,7 @@ impl ChatWidget {
             instruction_source_paths: Vec::new(),
             session_network_proxy: None,
             status_line_invalid_items_warned,
+            ccu_status_line_preset_enabled,
             terminal_title_invalid_items_warned,
             last_terminal_title: None,
             last_terminal_title_requires_action: false,

@@ -60,7 +60,7 @@ impl ChatWidget {
 
     pub(super) fn handle_service_tier_command_dispatch(&mut self, command: ServiceTierCommand) {
         if self.active_side_conversation {
-            let command_name = command.name.clone();
+            let command_name = command.name;
             self.add_error_message(slash_text_with_arg(
                 "slash-command-unavailable-side",
                 "command",

@@ -65,6 +65,32 @@ fn ccu_quota_falls_back_to_percent_when_currencies_differ() {
     assert_eq!(summary.remaining_percent, Some(60));
 }
 
+#[tokio::test]
+async fn ccu_status_line_preset_is_optional_and_explicit_config_wins() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.config.tui_status_line = None;
+    chat.ccu_status_line_preset_enabled = false;
+    assert_eq!(
+        chat.configured_status_line_items(),
+        vec!["model-with-reasoning", "current-dir"]
+    );
+
+    chat.ccu_status_line_preset_enabled = true;
+    assert_eq!(
+        chat.configured_status_line_items(),
+        vec![
+            "model-with-reasoning",
+            "context-tokens",
+            "context-progress",
+            "session-timing",
+            "quota",
+        ]
+    );
+
+    chat.config.tui_status_line = Some(vec!["git-branch".to_string()]);
+    assert_eq!(chat.configured_status_line_items(), vec!["git-branch"]);
+}
+
 /// Receiving a token usage update without usage clears the context indicator.
 #[tokio::test]
 async fn token_count_none_resets_context_indicator() {
