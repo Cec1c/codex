@@ -830,7 +830,7 @@ impl ChatWidget {
                 )
             }),
             StatusLineItem::ContextTokens => self.status_line_context_window_size().map(|window| {
-                let used = self.status_line_total_usage().blended_total().max(0);
+                let used = self.status_line_context_used_tokens();
                 format!(
                     "{}/{}",
                     format_tokens_compact(used),

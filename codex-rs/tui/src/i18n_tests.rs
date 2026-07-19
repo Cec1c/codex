@@ -10,9 +10,8 @@ use tempfile::TempDir;
 
 use super::Localizer;
 use super::discover_language_packs;
-use super::language_pack_root;
 use super::normalized_language;
-use super::save_language_preference;
+use super::save_language_preference_with_root;
 use super::self_check_json;
 
 const TEST_FTL: &str = r#"
@@ -296,13 +295,13 @@ fn missing_language_pack_root_is_an_empty_catalog() {
 #[test]
 fn language_preference_accepts_an_installed_primary_language_alias() {
     let temp = TempDir::new().expect("temp dir");
-    let root = language_pack_root(temp.path());
+    let root = temp.path().join("language-packs");
     write_language_pack(
         &root, "zh-CN", "zh-CN", /*api_min*/ 1, /*api_max*/ 1, TEST_FTL,
         /*hash_override*/ None,
     );
 
-    save_language_preference(temp.path(), "zh").expect("save language preference");
+    save_language_preference_with_root(temp.path(), "zh", &root).expect("save language preference");
     assert_eq!(
         fs::read_to_string(temp.path().join("ui-language")).expect("read preference"),
         "zh-CN\n"

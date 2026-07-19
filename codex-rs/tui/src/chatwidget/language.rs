@@ -34,8 +34,14 @@ impl ChatWidget {
         match crate::i18n::discover_language_packs(&language_root) {
             Ok(candidates) if candidates.is_empty() => {
                 items.push(SelectionItem {
-                    name: "No external language packs installed".to_string(),
-                    disabled_reason: Some("Use CCU to install language packs.".to_string()),
+                    name: localizer.text("language-picker-no-external-packs", None, || {
+                        "No external language packs installed".to_string()
+                    }),
+                    disabled_reason: Some(localizer.text(
+                        "language-picker-install-with-ccu",
+                        None,
+                        || "Use CCU to install language packs.".to_string(),
+                    )),
                     ..Default::default()
                 });
             }
@@ -53,7 +59,14 @@ impl ChatWidget {
                         .id
                         .as_deref()
                         .map(|id| format!("{} · {id}", candidate.locale))
-                        .or_else(|| Some(format!("Locale {}", candidate.locale)));
+                        .or_else(|| {
+                            Some(localizer.text_with_string_arg(
+                                "language-picker-locale-description",
+                                "locale",
+                                candidate.locale.clone(),
+                                || format!("Locale {}", candidate.locale),
+                            ))
+                        });
                     let search_value = Some(format!(
                         "{} {} {}",
                         candidate.locale,
@@ -92,7 +105,9 @@ impl ChatWidget {
             }
             Err(error) => {
                 items.push(SelectionItem {
-                    name: "Language packs unavailable".to_string(),
+                    name: localizer.text("language-picker-unavailable", None, || {
+                        "Language packs unavailable".to_string()
+                    }),
                     disabled_reason: Some(error),
                     ..Default::default()
                 });
@@ -115,7 +130,11 @@ impl ChatWidget {
             items,
             initial_selected_idx,
             is_searchable: true,
-            search_placeholder: Some("Type to search languages".to_string()),
+            search_placeholder: Some(localizer.text(
+                "language-picker-search-placeholder",
+                None,
+                || "Type to search languages".to_string(),
+            )),
             ..Default::default()
         });
     }
