@@ -1680,18 +1680,41 @@ impl App {
                     .await
                 {
                     Ok(_) => {
-                        let message = if let Some(service_tier) = service_tier {
-                            format!("Service tier set to {service_tier}")
-                        } else {
-                            "Service tier cleared".to_string()
+                        let message = match service_tier.as_deref() {
+                            Some("fast") => {
+                                crate::i18n::global().text("fast-mode-enabled", None, || {
+                                    "Fast mode enabled".to_string()
+                                })
+                            }
+                            Some("default") => {
+                                crate::i18n::global().text("fast-mode-disabled", None, || {
+                                    "Fast mode disabled".to_string()
+                                })
+                            }
+                            Some(service_tier) => crate::i18n::global().text_with_string_arg(
+                                "service-tier-set",
+                                "tier",
+                                service_tier,
+                                || format!("Service tier set to {service_tier}"),
+                            ),
+                            None => {
+                                crate::i18n::global().text("service-tier-cleared", None, || {
+                                    "Service tier cleared".to_string()
+                                })
+                            }
                         };
                         self.chat_widget.add_info_message(message, /*hint*/ None);
                     }
                     Err(err) => {
                         tracing::error!(error = %err, "failed to persist service tier selection");
-                        self.chat_widget.add_error_message(format!(
-                            "Failed to save default service tier: {err}"
-                        ));
+                        self.chat_widget.add_error_message(
+                            crate::i18n::global().text_with_string_arg(
+                                "service-tier-save-failed",
+                                "error",
+                                err.to_string(),
+                                || format!("Failed to save default service tier: {err}"),
+                            ),
+                        );
                     }
                 }
             }
