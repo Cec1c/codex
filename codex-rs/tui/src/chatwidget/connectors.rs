@@ -319,7 +319,7 @@ impl ChatWidget {
         let status_label = Self::connector_status_label(connector);
         match Self::connector_description(connector) {
             Some(description) => format!("{status_label} · {description}"),
-            None => status_label.to_string(),
+            None => status_label,
         }
     }
 
