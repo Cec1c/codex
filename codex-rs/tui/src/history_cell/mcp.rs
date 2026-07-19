@@ -15,12 +15,20 @@ impl HistoryCell for CompletedMcpToolCallWithImageOutput {
         vec![Line::from("tool result (image output)")]
     }
 }
-fn mcp_auth_status_label(status: McpAuthStatus) -> &'static str {
+fn mcp_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+fn mcp_label(key: &str, english: &'static str) -> String {
+    format!("{}: ", mcp_text(key, english))
+}
+
+fn mcp_auth_status_label(status: McpAuthStatus) -> String {
     match status {
-        McpAuthStatus::Unsupported => "Unsupported",
-        McpAuthStatus::NotLoggedIn => "Not logged in",
-        McpAuthStatus::BearerToken => "Bearer token",
-        McpAuthStatus::OAuth => "OAuth",
+        McpAuthStatus::Unsupported => mcp_text("mcp-auth-unsupported", "Unsupported"),
+        McpAuthStatus::NotLoggedIn => mcp_text("mcp-auth-not-logged-in", "Not logged in"),
+        McpAuthStatus::BearerToken => mcp_text("mcp-auth-bearer-token", "Bearer token"),
+        McpAuthStatus::OAuth => "OAuth".to_string(),
     }
 }
 #[derive(Debug)]
@@ -320,17 +328,28 @@ pub(crate) fn empty_mcp_output() -> PlainHistoryCell {
     let lines: Vec<Line<'static>> = vec![
         "/mcp".magenta().into(),
         "".into(),
-        vec!["🔌  ".into(), "MCP Tools".bold()].into(),
+        vec![
+            "🔌  ".into(),
+            mcp_text("mcp-tools-title", "MCP Tools").bold(),
+        ]
+        .into(),
         "".into(),
-        "  • No MCP servers configured.".italic().into(),
+        vec![
+            "  • ".into(),
+            mcp_text("mcp-no-servers-configured", "No MCP servers configured.").italic(),
+        ]
+        .into(),
         Line::from(vec![
-            "    See the ".into(),
+            "    ".into(),
+            mcp_text("mcp-see-docs-prefix", "See the").into(),
+            " ".into(),
             crate::terminal_hyperlinks::osc8_hyperlink(
                 "https://developers.openai.com/codex/mcp",
-                "MCP docs",
+                &mcp_text("mcp-docs-label", "MCP docs"),
             )
             .underlined(),
-            " to configure them.".into(),
+            " ".into(),
+            mcp_text("mcp-see-docs-suffix", "to configure them.").into(),
         ])
         .style(Style::default().add_modifier(Modifier::DIM)),
     ];
@@ -350,12 +369,22 @@ pub(crate) fn new_mcp_tools_output(
     let mut lines: Vec<Line<'static>> = vec![
         "/mcp".magenta().into(),
         "".into(),
-        vec!["🔌  ".into(), "MCP Tools".bold()].into(),
+        vec![
+            "🔌  ".into(),
+            mcp_text("mcp-tools-title", "MCP Tools").bold(),
+        ]
+        .into(),
         "".into(),
     ];
 
     if tools.is_empty() {
-        lines.push("  • No MCP tools available.".italic().into());
+        lines.push(
+            vec![
+                "  • ".into(),
+                mcp_text("mcp-no-tools-available", "No MCP tools available.").italic(),
+            ]
+            .into(),
+        );
         lines.push("".into());
     }
 
@@ -379,19 +408,34 @@ pub(crate) fn new_mcp_tools_output(
         let mut header: Vec<Span<'static>> = vec!["  • ".into(), server.clone().into()];
         if !cfg.enabled {
             header.push(" ".into());
-            header.push("(disabled)".red());
+            header.push(mcp_text("mcp-disabled", "(disabled)").red());
             lines.push(header.into());
             if let Some(reason) = cfg.disabled_reason.as_ref().map(ToString::to_string) {
-                lines.push(vec!["    • Reason: ".into(), reason.dim()].into());
+                lines.push(
+                    vec![
+                        "    • ".into(),
+                        mcp_label("mcp-label-reason", "Reason").into(),
+                        reason.dim(),
+                    ]
+                    .into(),
+                );
             }
             lines.push(Line::from(""));
             continue;
         }
         lines.push(header.into());
-        lines.push(vec!["    • Status: ".into(), "enabled".green()].into());
         lines.push(
             vec![
-                "    • Auth: ".into(),
+                "    • ".into(),
+                mcp_label("mcp-label-status", "Status").into(),
+                mcp_text("mcp-enabled", "enabled").green(),
+            ]
+            .into(),
+        );
+        lines.push(
+            vec![
+                "    • ".into(),
+                mcp_label("mcp-label-auth", "Auth").into(),
                 mcp_auth_status_label(auth_status).into(),
             ]
             .into(),
@@ -411,15 +455,36 @@ pub(crate) fn new_mcp_tools_output(
                     format!(" {}", args.join(" "))
                 };
                 let cmd_display = format!("{command}{args_suffix}");
-                lines.push(vec!["    • Command: ".into(), cmd_display.into()].into());
+                lines.push(
+                    vec![
+                        "    • ".into(),
+                        mcp_label("mcp-label-command", "Command").into(),
+                        cmd_display.into(),
+                    ]
+                    .into(),
+                );
 
                 if let Some(cwd) = cwd.as_ref() {
-                    lines.push(vec!["    • Cwd: ".into(), cwd.to_string().into()].into());
+                    lines.push(
+                        vec![
+                            "    • ".into(),
+                            mcp_label("mcp-label-cwd", "Cwd").into(),
+                            cwd.to_string().into(),
+                        ]
+                        .into(),
+                    );
                 }
 
                 let env_display = format_env_display(env.as_ref(), env_vars);
                 if env_display != "-" {
-                    lines.push(vec!["    • Env: ".into(), env_display.into()].into());
+                    lines.push(
+                        vec![
+                            "    • ".into(),
+                            mcp_label("mcp-label-env", "Env").into(),
+                            env_display.into(),
+                        ]
+                        .into(),
+                    );
                 }
             }
             McpServerTransportConfig::StreamableHttp {
@@ -428,7 +493,14 @@ pub(crate) fn new_mcp_tools_output(
                 env_http_headers,
                 ..
             } => {
-                lines.push(vec!["    • URL: ".into(), url.clone().into()].into());
+                lines.push(
+                    vec![
+                        "    • ".into(),
+                        mcp_label("mcp-label-url", "URL").into(),
+                        url.clone().into(),
+                    ]
+                    .into(),
+                );
                 if let Some(headers) = http_headers.as_ref()
                     && !headers.is_empty()
                 {
@@ -439,7 +511,14 @@ pub(crate) fn new_mcp_tools_output(
                         .map(|(name, _)| format!("{name}=*****"))
                         .collect::<Vec<_>>()
                         .join(", ");
-                    lines.push(vec!["    • HTTP headers: ".into(), display.into()].into());
+                    lines.push(
+                        vec![
+                            "    • ".into(),
+                            mcp_label("mcp-label-http-headers", "HTTP headers").into(),
+                            display.into(),
+                        ]
+                        .into(),
+                    );
                 }
                 if let Some(headers) = env_http_headers.as_ref()
                     && !headers.is_empty()
@@ -451,23 +530,54 @@ pub(crate) fn new_mcp_tools_output(
                         .map(|(name, var)| format!("{name}={var}"))
                         .collect::<Vec<_>>()
                         .join(", ");
-                    lines.push(vec!["    • Env HTTP headers: ".into(), display.into()].into());
+                    lines.push(
+                        vec![
+                            "    • ".into(),
+                            mcp_label("mcp-label-env-http-headers", "Env HTTP headers").into(),
+                            display.into(),
+                        ]
+                        .into(),
+                    );
                 }
             }
         }
 
         if names.is_empty() {
-            lines.push("    • Tools: (none)".into());
+            lines.push(
+                vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-tools", "Tools").into(),
+                    mcp_text("mcp-none", "(none)").into(),
+                ]
+                .into(),
+            );
         } else {
-            lines.push(vec!["    • Tools: ".into(), names.join(", ").into()].into());
+            lines.push(
+                vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-tools", "Tools").into(),
+                    names.join(", ").into(),
+                ]
+                .into(),
+            );
         }
 
         let server_resources: Vec<Resource> =
             resources.get(server.as_str()).cloned().unwrap_or_default();
         if server_resources.is_empty() {
-            lines.push("    • Resources: (none)".into());
+            lines.push(
+                vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-resources", "Resources").into(),
+                    mcp_text("mcp-none", "(none)").into(),
+                ]
+                .into(),
+            );
         } else {
-            let mut spans: Vec<Span<'static>> = vec!["    • Resources: ".into()];
+            let mut spans: Vec<Span<'static>> = vec![
+                "    • ".into(),
+                mcp_label("mcp-label-resources", "Resources").into(),
+            ];
 
             for (idx, resource) in server_resources.iter().enumerate() {
                 if idx > 0 {
@@ -488,9 +598,19 @@ pub(crate) fn new_mcp_tools_output(
             .cloned()
             .unwrap_or_default();
         if server_templates.is_empty() {
-            lines.push("    • Resource templates: (none)".into());
+            lines.push(
+                vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-resource-templates", "Resource templates").into(),
+                    mcp_text("mcp-none", "(none)").into(),
+                ]
+                .into(),
+            );
         } else {
-            let mut spans: Vec<Span<'static>> = vec!["    • Resource templates: ".into()];
+            let mut spans: Vec<Span<'static>> = vec![
+                "    • ".into(),
+                mcp_label("mcp-label-resource-templates", "Resource templates").into(),
+            ];
 
             for (idx, template) in server_templates.iter().enumerate() {
                 if idx > 0 {
@@ -528,7 +648,11 @@ pub(crate) fn new_mcp_tools_output_from_statuses(
     let mut lines: Vec<Line<'static>> = vec![
         "/mcp".magenta().into(),
         "".into(),
-        vec!["🔌  ".into(), "MCP Tools".bold()].into(),
+        vec![
+            "🔌  ".into(),
+            mcp_text("mcp-tools-title", "MCP Tools").bold(),
+        ]
+        .into(),
         "".into(),
     ];
 
@@ -537,7 +661,13 @@ pub(crate) fn new_mcp_tools_output_from_statuses(
 
     let has_any_tools = statuses.iter().any(|status| !status.tools.is_empty());
     if !has_any_tools {
-        lines.push("  • No MCP tools available.".italic().into());
+        lines.push(
+            vec![
+                "  • ".into(),
+                mcp_text("mcp-no-tools-available", "No MCP tools available.").italic(),
+            ]
+            .into(),
+        );
         lines.push("".into());
     }
 
@@ -553,7 +683,8 @@ pub(crate) fn new_mcp_tools_output_from_statuses(
         };
         lines.push(
             vec![
-                "    • Auth: ".into(),
+                "    • ".into(),
+                mcp_label("mcp-label-auth", "Auth").into(),
                 mcp_auth_status_label(auth_status).into(),
             ]
             .into(),
@@ -562,17 +693,41 @@ pub(crate) fn new_mcp_tools_output_from_statuses(
         let mut names = status.tools.keys().cloned().collect::<Vec<_>>();
         names.sort();
         if names.is_empty() {
-            lines.push("    • Tools: (none)".into());
+            lines.push(
+                vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-tools", "Tools").into(),
+                    mcp_text("mcp-none", "(none)").into(),
+                ]
+                .into(),
+            );
         } else {
-            lines.push(vec!["    • Tools: ".into(), names.join(", ").into()].into());
+            lines.push(
+                vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-tools", "Tools").into(),
+                    names.join(", ").into(),
+                ]
+                .into(),
+            );
         }
 
         if matches!(detail, McpServerStatusDetail::Full) {
             let server_resources = status.resources.clone();
             if server_resources.is_empty() {
-                lines.push("    • Resources: (none)".into());
+                lines.push(
+                    vec![
+                        "    • ".into(),
+                        mcp_label("mcp-label-resources", "Resources").into(),
+                        mcp_text("mcp-none", "(none)").into(),
+                    ]
+                    .into(),
+                );
             } else {
-                let mut spans: Vec<Span<'static>> = vec!["    • Resources: ".into()];
+                let mut spans: Vec<Span<'static>> = vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-resources", "Resources").into(),
+                ];
 
                 for (idx, resource) in server_resources.iter().enumerate() {
                     if idx > 0 {
@@ -590,9 +745,19 @@ pub(crate) fn new_mcp_tools_output_from_statuses(
 
             let server_templates = status.resource_templates.clone();
             if server_templates.is_empty() {
-                lines.push("    • Resource templates: (none)".into());
+                lines.push(
+                    vec![
+                        "    • ".into(),
+                        mcp_label("mcp-label-resource-templates", "Resource templates").into(),
+                        mcp_text("mcp-none", "(none)").into(),
+                    ]
+                    .into(),
+                );
             } else {
-                let mut spans: Vec<Span<'static>> = vec!["    • Resource templates: ".into()];
+                let mut spans: Vec<Span<'static>> = vec![
+                    "    • ".into(),
+                    mcp_label("mcp-label-resource-templates", "Resource templates").into(),
+                ];
 
                 for (idx, template) in server_templates.iter().enumerate() {
                     if idx > 0 {
@@ -647,7 +812,7 @@ impl HistoryCell for McpInventoryLoadingCell {
                 )
                 .unwrap_or_else(|| "•".dim()),
                 " ".into(),
-                "Loading MCP inventory".bold(),
+                mcp_text("mcp-loading-inventory", "Loading MCP inventory").bold(),
                 "…".dim(),
             ]
             .into(),
@@ -655,7 +820,10 @@ impl HistoryCell for McpInventoryLoadingCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        vec![Line::from("Loading MCP inventory...")]
+        vec![Line::from(mcp_text(
+            "mcp-loading-inventory-dots",
+            "Loading MCP inventory...",
+        ))]
     }
 
     fn transcript_animation_tick(&self) -> Option<u64> {

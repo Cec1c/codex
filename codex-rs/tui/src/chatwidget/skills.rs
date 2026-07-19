@@ -23,6 +23,10 @@ use codex_protocol::parse_command::ParsedCommand;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use codex_utils_plugins::mention_syntax::TOOL_MENTION_SIGIL;
 
+fn skills_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 impl ChatWidget {
     pub(crate) fn open_skills_list(&mut self) {
         if self.config.features.enabled(Feature::MentionsV2) {
@@ -40,9 +44,12 @@ impl ChatWidget {
         };
         let items = vec![
             SelectionItem {
-                name: "List skills".to_string(),
-                description: Some(format!(
-                    "Tip: press {list_shortcut} to open this list directly."
+                name: skills_text("skills-list", "List skills"),
+                description: Some(crate::i18n::global().text_with_string_arg(
+                    "skills-list-shortcut-hint",
+                    "shortcut",
+                    list_shortcut.to_string(),
+                    || format!("Tip: press {list_shortcut} to open this list directly."),
                 )),
                 actions: vec![Box::new(|tx| {
                     tx.send(AppEvent::OpenSkillsList);
@@ -51,8 +58,11 @@ impl ChatWidget {
                 ..Default::default()
             },
             SelectionItem {
-                name: "Enable/Disable Skills".to_string(),
-                description: Some("Enable or disable skills.".to_string()),
+                name: skills_text("skills-manage", "Enable/Disable Skills"),
+                description: Some(skills_text(
+                    "skills-manage-description",
+                    "Enable or disable skills.",
+                )),
                 actions: vec![Box::new(|tx| {
                     tx.send(AppEvent::OpenManageSkillsPopup);
                 })],
@@ -62,8 +72,8 @@ impl ChatWidget {
         ];
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Skills".to_string()),
-            subtitle: Some("Choose an action".to_string()),
+            title: Some(skills_text("skills-title", "Skills")),
+            subtitle: Some(skills_text("skills-choose-action", "Choose an action")),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             ..Default::default()
@@ -72,7 +82,10 @@ impl ChatWidget {
 
     pub(crate) fn open_manage_skills_popup(&mut self) {
         if self.skills_all.is_empty() {
-            self.add_info_message("No skills available.".to_string(), /*hint*/ None);
+            self.add_info_message(
+                skills_text("skills-none-available", "No skills available."),
+                /*hint*/ None,
+            );
             return;
         }
 
@@ -145,8 +158,13 @@ impl ChatWidget {
         if enabled_count == 0 && disabled_count == 0 {
             return;
         }
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("enabled", enabled_count.to_string());
+        args.set("disabled", disabled_count.to_string());
         self.add_info_message(
-            format!("{enabled_count} skills enabled, {disabled_count} skills disabled"),
+            crate::i18n::global().text("skills-updated", Some(&args), || {
+                format!("{enabled_count} skills enabled, {disabled_count} skills disabled")
+            }),
             /*hint*/ None,
         );
     }

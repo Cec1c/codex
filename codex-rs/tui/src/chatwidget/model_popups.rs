@@ -4,8 +4,111 @@
 //! into another, especially while Plan mode is active.
 
 use super::*;
+use fluent_bundle::FluentArgs;
 
 const ULTRA_REASONING_CONCURRENCY_WARNING_THRESHOLD: usize = 8;
+
+fn model_popup_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+fn model_popup_text_with_arg<F>(
+    key: &str,
+    arg_name: &str,
+    arg_value: impl Into<String>,
+    english: F,
+) -> String
+where
+    F: FnOnce() -> String,
+{
+    crate::i18n::global().text_with_string_arg(key, arg_name, arg_value, english)
+}
+
+fn localize_model_description(description: &str) -> String {
+    let localized = match description {
+        "Automatic approval review model for Codex." => Some((
+            "model-description-automatic-approval-review",
+            "Automatic approval review model for Codex.",
+        )),
+        "Balanced agentic coding model for everyday work." => Some((
+            "model-description-balanced-agentic",
+            "Balanced agentic coding model for everyday work.",
+        )),
+        "Extra high reasoning depth for complex problems" => Some((
+            "reasoning-description-extra-high-depth",
+            "Extra high reasoning depth for complex problems",
+        )),
+        "Extra high reasoning for complex problems" => Some((
+            "reasoning-description-extra-high",
+            "Extra high reasoning for complex problems",
+        )),
+        "Fast and affordable agentic coding model." => Some((
+            "model-description-fast-affordable-agentic",
+            "Fast and affordable agentic coding model.",
+        )),
+        "Fast responses with lighter reasoning" => Some((
+            "reasoning-description-fast-lighter",
+            "Fast responses with lighter reasoning",
+        )),
+        "Frontier model for complex coding, research, and real-world work." => Some((
+            "model-description-frontier-complex-work",
+            "Frontier model for complex coding, research, and real-world work.",
+        )),
+        "Greater reasoning depth for complex problems" => Some((
+            "reasoning-description-greater-depth",
+            "Greater reasoning depth for complex problems",
+        )),
+        "Latest frontier agentic coding model." => Some((
+            "model-description-latest-frontier-agentic",
+            "Latest frontier agentic coding model.",
+        )),
+        "Maximizes reasoning depth for complex or ambiguous problems" => Some((
+            "reasoning-description-max-complex-ambiguous",
+            "Maximizes reasoning depth for complex or ambiguous problems",
+        )),
+        "Maximum reasoning depth for the hardest problems" => Some((
+            "reasoning-description-maximum-hardest",
+            "Maximum reasoning depth for the hardest problems",
+        )),
+        "Maximum reasoning with automatic task delegation" => Some((
+            "reasoning-description-maximum-delegation",
+            "Maximum reasoning with automatic task delegation",
+        )),
+        "Optimized for professional work and long-running agents." => Some((
+            "model-description-professional-long-running",
+            "Optimized for professional work and long-running agents.",
+        )),
+        "Provides a solid balance of reasoning depth and latency for general-purpose tasks" => {
+            Some((
+                "reasoning-description-balanced-general",
+                "Provides a solid balance of reasoning depth and latency for general-purpose tasks",
+            ))
+        }
+        "Balances speed and reasoning depth for everyday tasks" => Some((
+            "reasoning-description-balanced-everyday",
+            "Balances speed and reasoning depth for everyday tasks",
+        )),
+        "Balances speed with some reasoning; useful for straightforward queries and short explanations" => {
+            Some((
+                "reasoning-description-balanced-straightforward",
+                "Balances speed with some reasoning; useful for straightforward queries and short explanations",
+            ))
+        }
+        "Small, fast, and cost-efficient model for simpler coding tasks." => Some((
+            "model-description-small-fast-efficient",
+            "Small, fast, and cost-efficient model for simpler coding tasks.",
+        )),
+        "Strong model for everyday coding." => Some((
+            "model-description-strong-everyday",
+            "Strong model for everyday coding.",
+        )),
+        _ => None,
+    };
+    localized.map_or_else(
+        || description.to_string(),
+        |(key, english)| model_popup_text(key, english),
+    )
+}
 
 impl ChatWidget {
     /// Open a popup to choose a quick auto model. Selecting "All models"
@@ -13,7 +116,10 @@ impl ChatWidget {
     pub(crate) fn open_model_popup(&mut self) {
         if !self.is_session_configured() {
             self.add_info_message(
-                "Model selection is disabled until startup completes.".to_string(),
+                model_popup_text(
+                    "model-picker-startup-disabled",
+                    "Model selection is disabled until startup completes.",
+                ),
                 /*hint*/ None,
             );
             return;
@@ -23,7 +129,10 @@ impl ChatWidget {
             Ok(models) => models,
             Err(_) => {
                 self.add_info_message(
-                    "Models are being updated; please try /model again in a moment.".to_string(),
+                    model_popup_text(
+                        "model-picker-updating",
+                        "Models are being updated; please try /model again in a moment.",
+                    ),
                     /*hint*/ None,
                 );
                 return;
@@ -46,8 +155,15 @@ impl ChatWidget {
 
     fn model_menu_warning_line(&self) -> Option<Line<'static>> {
         let base_url = self.custom_openai_base_url()?;
-        let warning = format!(
-            "Warning: OpenAI base URL is overridden to {base_url}. Selecting models may not be supported or work properly."
+        let warning = model_popup_text_with_arg(
+            "model-picker-custom-base-url-warning",
+            "base_url",
+            base_url.clone(),
+            || {
+                format!(
+                    "Warning: OpenAI base URL is overridden to {base_url}. Selecting models may not be supported or work properly."
+                )
+            },
         );
         Some(Line::from(warning.red()))
     }
@@ -97,8 +213,8 @@ impl ChatWidget {
         let mut items: Vec<SelectionItem> = auto_presets
             .into_iter()
             .map(|preset| {
-                let description =
-                    (!preset.description.is_empty()).then_some(preset.description.clone());
+                let description = (!preset.description.is_empty())
+                    .then(|| localize_model_description(&preset.description));
                 let model = preset.model.clone();
                 let requires_advanced_selection =
                     Self::is_advanced_reasoning_effort(&preset.default_reasoning_effort)
@@ -147,12 +263,19 @@ impl ChatWidget {
             })];
 
             let is_current = !items.iter().any(|item| item.is_current);
-            let description = Some(format!(
-                "Choose a specific model and reasoning level (current: {current_label})"
+            let description = Some(model_popup_text_with_arg(
+                "model-picker-all-models-description",
+                "current_model",
+                current_label.clone(),
+                || {
+                    format!(
+                        "Choose a specific model and reasoning level (current: {current_label})"
+                    )
+                },
             ));
 
             items.push(SelectionItem {
-                name: "All models".to_string(),
+                name: model_popup_text("model-picker-all-models", "All models"),
                 description,
                 is_current,
                 actions,
@@ -162,8 +285,11 @@ impl ChatWidget {
         }
 
         let header = self.model_menu_header(
-            "Select Model",
-            "Pick a quick auto mode or browse all models.",
+            &model_popup_text("model-picker-title", "Select Model"),
+            &model_popup_text(
+                "model-picker-subtitle",
+                "Pick a quick auto mode or browse all models.",
+            ),
         );
         self.bottom_pane.show_selection_view(SelectionViewParams {
             footer_hint: Some(standard_popup_hint_line()),
@@ -189,7 +315,10 @@ impl ChatWidget {
     pub(crate) fn open_all_models_popup(&mut self, presets: Vec<ModelPreset>) {
         if presets.is_empty() {
             self.add_info_message(
-                "No additional models are available right now.".to_string(),
+                model_popup_text(
+                    "model-picker-no-additional-models",
+                    "No additional models are available right now.",
+                ),
                 /*hint*/ None,
             );
             return;
@@ -197,8 +326,8 @@ impl ChatWidget {
 
         let mut items: Vec<SelectionItem> = Vec::new();
         for preset in presets.into_iter() {
-            let description =
-                (!preset.description.is_empty()).then_some(preset.description.to_string());
+            let description = (!preset.description.is_empty())
+                .then(|| localize_model_description(&preset.description));
             let is_current = preset.model.as_str() == self.current_model();
             let single_supported_effort = preset.supported_reasoning_efforts.len() == 1;
             let preset_for_action = preset.clone();
@@ -221,8 +350,11 @@ impl ChatWidget {
         }
 
         let header = self.model_menu_header(
-            "Select Model and Effort",
-            "Access legacy models by running codex -m <model_name> or in your config.toml",
+            &model_popup_text("model-picker-all-models-title", "Select Model and Effort"),
+            &model_popup_text(
+                "model-picker-all-models-subtitle",
+                "Access legacy models by running codex -m <model_name> or in your config.toml",
+            ),
         );
         self.bottom_pane.show_selection_view(SelectionViewParams {
             footer_hint: Some(self.bottom_pane.standard_popup_hint_line()),
@@ -294,22 +426,35 @@ impl ChatWidget {
         effort: Option<ReasoningEffortConfig>,
     ) {
         let reasoning_phrase = match effort.as_ref() {
-            Some(ReasoningEffortConfig::None) => "no reasoning".to_string(),
+            Some(ReasoningEffortConfig::None) => {
+                model_popup_text("model-picker-no-reasoning", "no reasoning")
+            }
             Some(selected_effort) => {
-                format!(
-                    "{} reasoning",
-                    Self::reasoning_effort_sentence_label(selected_effort)
+                let effort_label = Self::reasoning_effort_sentence_label(selected_effort);
+                model_popup_text_with_arg(
+                    "model-picker-reasoning-phrase",
+                    "effort",
+                    effort_label.clone(),
+                    || format!("{effort_label} reasoning"),
                 )
             }
-            None => "the selected reasoning".to_string(),
+            None => model_popup_text("model-picker-selected-reasoning", "the selected reasoning"),
         };
-        let plan_only_description = format!("Always use {reasoning_phrase} in Plan mode.");
+        let plan_only_description = model_popup_text_with_arg(
+            "model-picker-plan-only-description",
+            "reasoning",
+            reasoning_phrase.clone(),
+            || format!("Always use {reasoning_phrase} in Plan mode."),
+        );
         let plan_reasoning_source = if let Some(plan_override) =
             self.config.plan_mode_reasoning_effort.as_ref()
         {
-            format!(
-                "user-chosen Plan override ({})",
-                Self::reasoning_effort_sentence_label(plan_override)
+            let effort_label = Self::reasoning_effort_sentence_label(plan_override);
+            model_popup_text_with_arg(
+                "model-picker-plan-source-user-override",
+                "effort",
+                effort_label.clone(),
+                || format!("user-chosen Plan override ({effort_label})"),
             )
         } else if let Some(plan_mask) = collaboration_modes::plan_mask(self.model_catalog.as_ref())
         {
@@ -318,19 +463,51 @@ impl ChatWidget {
                 .as_ref()
                 .and_then(|effort| effort.as_ref())
             {
-                Some(plan_effort) => format!(
-                    "built-in Plan default ({})",
-                    Self::reasoning_effort_sentence_label(plan_effort)
+                Some(plan_effort) => {
+                    let effort_label = Self::reasoning_effort_sentence_label(plan_effort);
+                    model_popup_text_with_arg(
+                        "model-picker-plan-source-built-in-effort",
+                        "effort",
+                        effort_label.clone(),
+                        || format!("built-in Plan default ({effort_label})"),
+                    )
+                }
+                None => model_popup_text(
+                    "model-picker-plan-source-built-in-no-reasoning",
+                    "built-in Plan default (no reasoning)",
                 ),
-                None => "built-in Plan default (no reasoning)".to_string(),
             }
         } else {
-            "built-in Plan default".to_string()
+            model_popup_text("model-picker-plan-source-built-in", "built-in Plan default")
         };
-        let all_modes_description = format!(
-            "Set the global default reasoning level and the Plan mode override. This replaces the current {plan_reasoning_source}."
+        let all_modes_description = model_popup_text_with_arg(
+            "model-picker-all-modes-description",
+            "source",
+            plan_reasoning_source.clone(),
+            || {
+                format!(
+                    "Set the global default reasoning level and the Plan mode override. This replaces the current {plan_reasoning_source}."
+                )
+            },
         );
-        let subtitle = format!("Choose where to apply {reasoning_phrase}.");
+        let subtitle = model_popup_text_with_arg(
+            "model-picker-plan-scope-subtitle",
+            "reasoning",
+            reasoning_phrase.clone(),
+            || format!("Choose where to apply {reasoning_phrase}."),
+        );
+        let scope_title = model_popup_text(
+            "model-picker-plan-scope-title",
+            PLAN_MODE_REASONING_SCOPE_TITLE,
+        );
+        let plan_only_name = model_popup_text(
+            "model-picker-plan-scope-plan-only",
+            PLAN_MODE_REASONING_SCOPE_PLAN_ONLY,
+        );
+        let all_modes_name = model_popup_text(
+            "model-picker-plan-scope-all-modes",
+            PLAN_MODE_REASONING_SCOPE_ALL_MODES,
+        );
         let warning = effort
             .as_ref()
             .and_then(|effort| self.ultra_reasoning_concurrency_warning(effort));
@@ -367,19 +544,19 @@ impl ChatWidget {
         })];
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some(PLAN_MODE_REASONING_SCOPE_TITLE.to_string()),
+            title: Some(scope_title.clone()),
             subtitle: Some(subtitle),
             footer_hint: Some(standard_popup_hint_line()),
             items: vec![
                 SelectionItem {
-                    name: PLAN_MODE_REASONING_SCOPE_PLAN_ONLY.to_string(),
+                    name: plan_only_name,
                     description: Some(plan_only_description),
                     actions: plan_only_actions,
                     dismiss_on_select: true,
                     ..Default::default()
                 },
                 SelectionItem {
-                    name: PLAN_MODE_REASONING_SCOPE_ALL_MODES.to_string(),
+                    name: all_modes_name,
                     description: Some(all_modes_description),
                     actions: all_modes_actions,
                     dismiss_on_select: true,
@@ -388,9 +565,7 @@ impl ChatWidget {
             ],
             ..Default::default()
         });
-        self.notify(Notification::PlanModePrompt {
-            title: PLAN_MODE_REASONING_SCOPE_TITLE.to_string(),
-        });
+        self.notify(Notification::PlanModePrompt { title: scope_title });
     }
 
     /// Open a popup to choose the standard reasoning effort for the given model.
@@ -418,7 +593,16 @@ impl ChatWidget {
         };
         let warning_text = warn_effort.as_ref().map(|effort| {
             let effort_label = Self::reasoning_effort_label(effort);
-            format!("⚠ {effort_label} reasoning effort can quickly consume Plus plan rate limits.")
+            model_popup_text_with_arg(
+                "model-picker-plus-limit-warning",
+                "effort",
+                effort_label.clone(),
+                || {
+                    format!(
+                        "⚠ {effort_label} reasoning effort can quickly consume Plus plan rate limits."
+                    )
+                },
+            )
         });
         let warn_for_model = preset.model.starts_with("gpt-5.1-codex")
             || preset.model.starts_with("gpt-5.1-codex-max")
@@ -479,13 +663,16 @@ impl ChatWidget {
             let effort = choice.clone();
             let mut effort_label = Self::reasoning_effort_label(&effort);
             if Some(choice) == default_choice.as_ref() {
-                effort_label.push_str(" (default)");
+                let default_label =
+                    crate::i18n::global()
+                        .text("selection-marker-default", None, || "default".to_string());
+                effort_label.push_str(&format!(" ({default_label})"));
             }
 
             let description = supported
                 .iter()
                 .find(|option| option.effort == effort)
-                .map(|option| option.description.to_string())
+                .map(|option| localize_model_description(&option.description))
                 .filter(|text| !text.is_empty());
 
             let show_warning = warn_for_model && warn_effort.as_ref() == Some(&effort);
@@ -527,11 +714,24 @@ impl ChatWidget {
                 .iter()
                 .map(Self::reasoning_effort_label)
                 .collect::<Vec<_>>()
-                .join(" and ");
-            let verb = if advanced_choices.len() == 1 {
-                "consumes"
+                .join(&format!(
+                    " {} ",
+                    model_popup_text("model-picker-effort-join", "and")
+                ));
+            let description = if advanced_choices.len() == 1 {
+                model_popup_text_with_arg(
+                    "model-picker-more-reasoning-description-one",
+                    "efforts",
+                    advanced_label.clone(),
+                    || format!("{advanced_label} consumes usage limits faster"),
+                )
             } else {
-                "consume"
+                model_popup_text_with_arg(
+                    "model-picker-more-reasoning-description-many",
+                    "efforts",
+                    advanced_label.clone(),
+                    || format!("{advanced_label} consume usage limits faster"),
+                )
             };
             let preset_for_action = preset;
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
@@ -540,8 +740,8 @@ impl ChatWidget {
                 });
             })];
             items.push(SelectionItem {
-                name: "More reasoning…".to_string(),
-                description: Some(format!("{advanced_label} {verb} usage limits faster")),
+                name: model_popup_text("model-picker-more-reasoning", "More reasoning…"),
+                description: Some(description),
                 is_current: is_current_model
                     && highlight_choice
                         .as_ref()
@@ -553,9 +753,13 @@ impl ChatWidget {
         }
 
         let mut header = ColumnRenderable::new();
-        header.push(Line::from(
-            format!("Select Reasoning Level for {model_slug}").bold(),
-        ));
+        let title = model_popup_text_with_arg(
+            "model-picker-reasoning-title",
+            "model",
+            model_slug.clone(),
+            || format!("Select Reasoning Level for {model_slug}"),
+        );
+        header.push(Line::from(title.bold()));
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
@@ -592,12 +796,14 @@ impl ChatWidget {
         let mut items = Vec::new();
         for effort in choices {
             let description = match &effort {
-                ReasoningEffortConfig::Max => {
-                    "For difficult problems when quality matters more than speed · higher usage"
-                }
-                ReasoningEffortConfig::Ultra => {
-                    "For demanding work using multiple agents · highest usage"
-                }
+                ReasoningEffortConfig::Max => model_popup_text(
+                    "model-picker-advanced-max-description",
+                    "For difficult problems when quality matters more than speed · higher usage",
+                ),
+                ReasoningEffortConfig::Ultra => model_popup_text(
+                    "model-picker-advanced-ultra-description",
+                    "For demanding work using multiple agents · highest usage",
+                ),
                 _ => unreachable!("advanced choices are limited to Max and Ultra"),
             };
             let should_prompt_plan_mode_scope = self
@@ -610,7 +816,7 @@ impl ChatWidget {
 
             items.push(SelectionItem {
                 name: Self::reasoning_effort_label(&effort),
-                description: Some(description.to_string()),
+                description: Some(description),
                 is_current: is_current_model && Some(&effort) == highlight_choice.as_ref(),
                 actions,
                 dismiss_on_select: true,
@@ -619,8 +825,16 @@ impl ChatWidget {
         }
 
         let mut header = ColumnRenderable::new();
-        header.push(Line::from("Advanced Reasoning".bold()));
-        header.push(Line::from("⚠ Consumes usage limits faster".cyan()));
+        header.push(Line::from(
+            model_popup_text("model-picker-advanced-title", "Advanced Reasoning").bold(),
+        ));
+        header.push(Line::from(
+            model_popup_text(
+                "model-picker-advanced-subtitle",
+                "⚠ Consumes usage limits faster",
+            )
+            .cyan(),
+        ));
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
             footer_hint: Some(standard_popup_hint_line()),
@@ -638,14 +852,18 @@ impl ChatWidget {
 
     pub(super) fn reasoning_effort_label(effort: &ReasoningEffortConfig) -> String {
         match effort {
-            ReasoningEffortConfig::None => "None".to_string(),
-            ReasoningEffortConfig::Minimal => "Minimal".to_string(),
-            ReasoningEffortConfig::Low => "Low".to_string(),
-            ReasoningEffortConfig::Medium => "Medium".to_string(),
-            ReasoningEffortConfig::High => "High".to_string(),
-            ReasoningEffortConfig::XHigh => "Extra high".to_string(),
-            ReasoningEffortConfig::Max => "Max".to_string(),
-            ReasoningEffortConfig::Ultra => "Ultra".to_string(),
+            ReasoningEffortConfig::None => model_popup_text("reasoning-effort-none", "None"),
+            ReasoningEffortConfig::Minimal => {
+                model_popup_text("reasoning-effort-minimal", "Minimal")
+            }
+            ReasoningEffortConfig::Low => model_popup_text("reasoning-effort-low", "Low"),
+            ReasoningEffortConfig::Medium => model_popup_text("reasoning-effort-medium", "Medium"),
+            ReasoningEffortConfig::High => model_popup_text("reasoning-effort-high", "High"),
+            ReasoningEffortConfig::XHigh => {
+                model_popup_text("reasoning-effort-extra-high", "Extra high")
+            }
+            ReasoningEffortConfig::Max => model_popup_text("reasoning-effort-max", "Max"),
+            ReasoningEffortConfig::Ultra => model_popup_text("reasoning-effort-ultra", "Ultra"),
             ReasoningEffortConfig::Custom(value) => value.clone(),
         }
     }
@@ -674,11 +892,20 @@ impl ChatWidget {
         }
 
         let max_subagents = max_threads.saturating_sub(1);
-        Some(format!(
-            "Ultra reasoning may proactively use multiple agents. This session is configured for \
-             {max_threads} concurrent threads with up to {max_subagents} subagents which can \
-             increase usage quickly. Consider setting \
-             features.multi_agent_v2.max_concurrent_threads_per_session below 8."
+        let mut args = FluentArgs::new();
+        args.set("max_threads", max_threads);
+        args.set("max_subagents", max_subagents);
+        Some(crate::i18n::global().text(
+            "model-picker-ultra-concurrency-warning",
+            Some(&args),
+            || {
+                format!(
+                    "Ultra reasoning may proactively use multiple agents. This session is configured for \
+                     {max_threads} concurrent threads with up to {max_subagents} subagents which can \
+                     increase usage quickly. Consider setting \
+                     features.multi_agent_v2.max_concurrent_threads_per_session below 8."
+                )
+            },
         ))
     }
 

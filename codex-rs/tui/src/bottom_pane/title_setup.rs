@@ -131,6 +131,18 @@ impl TerminalTitleItem {
         }
     }
 
+    fn localized_name(self) -> String {
+        let item_id = self.to_string();
+        let key = format!("title-item-{item_id}-name");
+        crate::i18n::global().text(&key, None, || item_id)
+    }
+
+    fn localized_description(self) -> String {
+        let item_id = self.to_string();
+        let key = format!("title-item-{item_id}-description");
+        crate::i18n::global().text(&key, None, || self.description().to_string())
+    }
+
     pub(crate) fn preview_item(self) -> Option<StatusSurfacePreviewItem> {
         match self {
             TerminalTitleItem::AppName => Some(StatusSurfacePreviewItem::AppName),
@@ -275,8 +287,14 @@ impl TerminalTitleSetupView {
 
         Self {
             picker: MultiSelectPicker::builder(
-                "Configure Terminal Title".to_string(),
-                Some("Select which items to display in the terminal title.".to_string()),
+                crate::i18n::global().text("title-setup-title", None, || {
+                    "Configure Terminal Title".to_string()
+                }),
+                Some(
+                    crate::i18n::global().text("title-setup-subtitle", None, || {
+                        "Select which items to display in the terminal title.".to_string()
+                    }),
+                ),
                 app_event_tx,
             )
             .list_keymap(list_keymap)
@@ -320,17 +338,17 @@ impl TerminalTitleSetupView {
         enabled: bool,
         preview_data: &StatusSurfacePreviewData,
     ) -> MultiSelectItem {
-        let default_name = item.to_string();
-        let default_description = item.description();
+        let default_name = item.localized_name();
+        let default_description = item.localized_description();
         let (name, description) = match item.preview_item() {
             Some(
                 preview_item @ (StatusSurfacePreviewItem::FiveHourLimit
                 | StatusSurfacePreviewItem::WeeklyLimit),
             ) => (
                 preview_data.rate_limit_item_name(preview_item, &default_name),
-                preview_data.rate_limit_item_description(preview_item, default_description),
+                preview_data.rate_limit_item_description(preview_item, &default_description),
             ),
-            _ => (default_name, default_description.to_string()),
+            _ => (default_name, default_description),
         };
 
         MultiSelectItem {
