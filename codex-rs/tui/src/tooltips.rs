@@ -53,7 +53,7 @@ pub(crate) fn get_tooltip(plan: Option<PlanType>, fast_mode_enabled: bool) -> Op
     let mut rng = rand::rng();
 
     if let Some(announcement) = announcement::fetch_announcement_tip(plan) {
-        return Some(announcement);
+        return Some(localize_tooltip(&announcement));
     }
 
     // Leave small chance for a random tooltip to be shown.
@@ -67,11 +67,11 @@ pub(crate) fn get_tooltip(plan: Option<PlanType>, fast_mode_enabled: bool) -> Op
                     || plan_type.is_business_like() =>
             {
                 if let Some(tooltip) = pick_paid_tooltip(&mut rng, fast_mode_enabled) {
-                    return Some(tooltip.to_string());
+                    return Some(localize_tooltip(tooltip));
                 }
             }
             Some(PlanType::Go) | Some(PlanType::Free) => {
-                return Some(FREE_GO_TOOLTIP.to_string());
+                return Some(localize_tooltip(FREE_GO_TOOLTIP));
             }
             _ => {
                 let tooltip = if IS_MACOS {
@@ -79,7 +79,7 @@ pub(crate) fn get_tooltip(plan: Option<PlanType>, fast_mode_enabled: bool) -> Op
                 } else {
                     OTHER_TOOLTIP_NON_MAC
                 };
-                return Some(tooltip.to_string());
+                return Some(localize_tooltip(tooltip));
             }
         }
     }
@@ -121,13 +121,75 @@ fn pick_tooltip<R: Rng + ?Sized>(rng: &mut R) -> Option<&'static str> {
 }
 
 fn localize_tooltip(tip: &str) -> String {
-    match tip {
-        "Use /rename to rename your threads for easier thread resuming." => crate::i18n::global()
-            .text("tooltip-rename-threads", None, || {
-                "Use /rename to rename your threads for easier thread resuming.".to_string()
-            }),
-        _ => tip.to_string(),
-    }
+    let key = match tip {
+        APP_TOOLTIP => "tooltip-codex-app",
+        FAST_TOOLTIP => "tooltip-fast-mode",
+        OTHER_TOOLTIP => "tooltip-build-faster-app",
+        OTHER_TOOLTIP_NON_MAC => "tooltip-build-faster-codex",
+        FREE_GO_TOOLTIP => "tooltip-free-plan",
+        "Use /compact when the conversation gets long to summarize history and free up context." => {
+            "tooltip-compact"
+        }
+        "Start a fresh idea with /new; the previous session stays in history." => "tooltip-new",
+        "Use /feedback to send logs to the maintainers when something looks off." => {
+            "tooltip-feedback"
+        }
+        "Switch models or reasoning effort quickly with /model." => "tooltip-model",
+        "Use /permissions to control when Codex asks for confirmation." => "tooltip-permissions",
+        "Run /review to get a code review of your current changes." => "tooltip-review",
+        "Use /skills to list available skills or ask Codex to use one." => "tooltip-skills",
+        "Use /status to see the current model, approvals, and token usage." => "tooltip-status",
+        "Use /statusline to configure which items appear in the status line." => {
+            "tooltip-statusline"
+        }
+        "Use /fork to branch the current chat into a new thread." => "tooltip-fork",
+        "Use /side to start a side conversation in a temporary fork without polluting the main thread." => {
+            "tooltip-side"
+        }
+        "Use /init to create an AGENTS.md with project-specific guidance." => "tooltip-init",
+        "Use /mcp to list configured MCP tools." => "tooltip-mcp",
+        "Run `codex app` to open Codex Desktop (it installs on macOS if needed)." => {
+            "tooltip-open-desktop"
+        }
+        "Use /personality to customize how Codex communicates." => "tooltip-personality",
+        "Use /rename to rename your threads for easier thread resuming." => {
+            "tooltip-rename-threads"
+        }
+        "Use the OpenAI docs MCP for API questions; enable it with `codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp`." => {
+            "tooltip-openai-docs-mcp"
+        }
+        "Join the OpenAI community Discord: http://discord.gg/openai" => {
+            "tooltip-community-discord"
+        }
+        "Visit the Codex community forum: https://community.openai.com/c/codex/37" => {
+            "tooltip-community-forum"
+        }
+        "You can run any shell command from Codex using `!` (e.g. `!ls`)" => {
+            "tooltip-shell-command"
+        }
+        "Type / to open the command popup; Tab autocompletes slash commands." => {
+            "tooltip-command-popup"
+        }
+        "When the composer is empty, press Esc to step back and edit your last message; Enter confirms." => {
+            "tooltip-edit-last-message"
+        }
+        "Press Tab to queue a message when a task is running; otherwise it sends immediately (except `!`)." => {
+            "tooltip-queue-message"
+        }
+        "[tui.keymap] in ~/.codex/config.toml lets you rebind supported shortcuts." => {
+            "tooltip-keymap-config"
+        }
+        "See the Codex keymap documentation for supported actions and examples." => {
+            "tooltip-keymap-docs"
+        }
+        "Paste an image with Ctrl+V to attach it to your next message." => "tooltip-paste-image",
+        "You can resume a previous conversation by running `codex resume`" => "tooltip-resume",
+        "Use /copy or press Ctrl+O to copy the latest agent response as Markdown." => {
+            "tooltip-copy-response"
+        }
+        _ => return tip.to_string(),
+    };
+    crate::i18n::global().text(key, None, || tip.to_string())
 }
 
 pub(crate) mod announcement {

@@ -27,7 +27,15 @@ impl ChatWidget {
             Ok(response) => {
                 self.open_hooks_browser(hooks_list_entry_for_cwd(response, &cwd));
             }
-            Err(err) => self.add_error_message(format!("Failed to load hooks: {err}")),
+            Err(err) => {
+                let message = crate::i18n::global().text_with_string_arg(
+                    "hooks-load-failed",
+                    "error",
+                    err.clone(),
+                    || format!("Failed to load hooks: {err}"),
+                );
+                self.add_error_message(message);
+            }
         }
     }
 

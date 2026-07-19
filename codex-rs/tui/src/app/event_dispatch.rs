@@ -2203,9 +2203,14 @@ impl App {
                     Err(err) => {
                         let error = format_config_error(&err);
                         tracing::error!(error = %error, "failed to persist status line settings; keeping previous selection");
-                        self.chat_widget.add_error_message(format!(
-                            "Failed to save status line settings: {error}"
-                        ));
+                        self.chat_widget.add_error_message(
+                            crate::i18n::global().text_with_string_arg(
+                                "status-line-save-failed",
+                                "error",
+                                error.clone(),
+                                || format!("Failed to save status line settings: {error}"),
+                            ),
+                        );
                     }
                 }
             }
@@ -2243,9 +2248,15 @@ impl App {
                     Err(err) => {
                         tracing::error!(error = %err, "failed to persist terminal title items; keeping previous selection");
                         self.chat_widget.revert_terminal_title_setup_preview();
-                        self.chat_widget.add_error_message(format!(
-                            "Failed to save terminal title items: {err}"
-                        ));
+                        let error = err.to_string();
+                        self.chat_widget.add_error_message(
+                            crate::i18n::global().text_with_string_arg(
+                                "title-save-failed",
+                                "error",
+                                error.clone(),
+                                || format!("Failed to save terminal title items: {error}"),
+                            ),
+                        );
                     }
                 }
             }

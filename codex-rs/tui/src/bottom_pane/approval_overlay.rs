@@ -430,13 +430,25 @@ impl ApprovalOverlay {
         );
         if request.thread_label().is_none() {
             let message = if granted_permissions.is_empty() {
-                "You did not grant additional permissions"
+                approval_text(
+                    "approval-grant-result-denied",
+                    "You did not grant additional permissions",
+                )
             } else if strict_auto_review {
-                "You granted additional permissions with strict auto review"
+                approval_text(
+                    "approval-grant-result-strict-review",
+                    "You granted additional permissions with strict auto review",
+                )
             } else if matches!(scope, PermissionGrantScope::Session) {
-                "You granted additional permissions for this session"
+                approval_text(
+                    "approval-grant-result-session",
+                    "You granted additional permissions for this session",
+                )
             } else {
-                "You granted additional permissions"
+                approval_text(
+                    "approval-grant-result-turn",
+                    "You granted additional permissions",
+                )
             };
             self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
                 crate::history_cell::PlainHistoryCell::new(vec![message.into()]),
@@ -643,12 +655,17 @@ fn approval_footer_hint(
     if request.thread_label().is_some()
         && let Some(open_thread) = primary_binding(&approval_keymap.open_thread)
     {
+        let or = crate::i18n::global().text("popup-hint-or", None, || "or".to_string());
+        let press = crate::i18n::global().text("popup-hint-press", None, || "Press".to_string());
+        let open_thread_label = crate::i18n::global().text("popup-hint-open-thread", None, || {
+            "to open thread".to_string()
+        });
         if !spans.is_empty() {
-            spans.push(" or ".into());
+            spans.push(format!(" {or} ").into());
         } else {
-            spans.push("Press ".into());
+            spans.push(format!("{press} ").into());
         }
-        spans.extend([open_thread.into(), " to open thread".into()]);
+        spans.extend([open_thread.into(), format!(" {open_thread_label}").into()]);
     }
     Line::from(spans)
 }
@@ -688,27 +705,38 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut header: Vec<Line<'static>> = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 header.push(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(environment_id) = &request.environment_id {
                 header.push(Line::from(vec![
-                    "Environment: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-environment", "Environment")
+                    )
+                    .into(),
                     environment_id.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(reason) = &request.reason {
-                header.push(Line::from(vec!["Reason: ".into(), reason.clone().italic()]));
+                header.push(Line::from(vec![
+                    format!("{}: ", approval_text("approval-label-reason", "Reason")).into(),
+                    reason.clone().italic(),
+                ]));
                 header.push(Line::from(""));
             }
             if let Some(additional_permissions) = &request.additional_permissions
                 && let Some(rule_line) = format_additional_permissions_rule(additional_permissions)
             {
                 header.push(Line::from(vec![
-                    "Permission rule: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-permission-rule", "Permission rule")
+                    )
+                    .into(),
                     rule_line.cyan(),
                 ]));
                 header.push(Line::from(""));
@@ -727,25 +755,36 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut header: Vec<Line<'static>> = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 header.push(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(environment_id) = &request.environment_id {
                 header.push(Line::from(vec![
-                    "Environment: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-environment", "Environment")
+                    )
+                    .into(),
                     environment_id.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(reason) = &request.reason {
-                header.push(Line::from(vec!["Reason: ".into(), reason.clone().italic()]));
+                header.push(Line::from(vec![
+                    format!("{}: ", approval_text("approval-label-reason", "Reason")).into(),
+                    reason.clone().italic(),
+                ]));
                 header.push(Line::from(""));
             }
             if let Some(rule_line) = format_requested_permissions_rule(&request.permissions) {
                 header.push(Line::from(vec![
-                    "Permission rule: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-permission-rule", "Permission rule")
+                    )
+                    .into(),
                     rule_line.cyan(),
                 ]));
             }
@@ -755,7 +794,7 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut header: Vec<Box<dyn Renderable>> = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 header.push(Box::new(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ])));
             }
@@ -767,7 +806,7 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
                 }
                 header.push(Box::new(
                     Paragraph::new(Line::from_iter([
-                        "Reason: ".into(),
+                        format!("{}: ", approval_text("approval-label-reason", "Reason")).into(),
                         reason.clone().italic(),
                     ]))
                     .wrap(Wrap { trim: false }),
@@ -779,13 +818,16 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut lines = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 lines.push(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ]));
                 lines.push(Line::from(""));
             }
             lines.extend([
-                Line::from(vec!["Server: ".into(), request.server_name.clone().bold()]),
+                Line::from(vec![
+                    format!("{}: ", approval_text("approval-label-server", "Server")).into(),
+                    request.server_name.clone().bold(),
+                ]),
                 Line::from(""),
                 Line::from(request.message.clone()),
             ]);
@@ -866,8 +908,15 @@ fn exec_options(
                 }
 
                 Some(ApprovalOption {
-                    label: format!(
-                        "Yes, and don't ask again for commands that start with `{rendered_prefix}`"
+                    label: crate::i18n::global().text_with_string_arg(
+                        "approval-allow-command-prefix",
+                        "prefix",
+                        rendered_prefix.clone(),
+                        || {
+                            format!(
+                                "Yes, and don't ask again for commands that start with `{rendered_prefix}`"
+                            )
+                        },
                     ),
                     decision: ApprovalDecision::Command(
                         CommandExecutionApprovalDecision::AcceptWithExecpolicyAmendment {
@@ -958,7 +1007,7 @@ pub(crate) fn format_additional_permissions_rule(
         .and_then(|network| network.enabled)
         .unwrap_or(false)
     {
-        parts.push("network".to_string());
+        parts.push(approval_text("approval-permission-network", "network"));
     }
     if let Some(file_system) = additional_permissions.file_system.as_ref() {
         let reads = format_file_system_entry_paths(
@@ -969,7 +1018,12 @@ pub(crate) fn format_additional_permissions_rule(
                 .filter(|entry| entry.access == FileSystemAccessMode::Read),
         );
         if !reads.is_empty() {
-            parts.push(format!("read {reads}"));
+            parts.push(crate::i18n::global().text_with_string_arg(
+                "approval-permission-read",
+                "paths",
+                reads.clone(),
+                || format!("read {reads}"),
+            ));
         }
         let writes = format_file_system_entry_paths(
             file_system
@@ -979,7 +1033,12 @@ pub(crate) fn format_additional_permissions_rule(
                 .filter(|entry| entry.access == FileSystemAccessMode::Write),
         );
         if !writes.is_empty() {
-            parts.push(format!("write {writes}"));
+            parts.push(crate::i18n::global().text_with_string_arg(
+                "approval-permission-write",
+                "paths",
+                writes.clone(),
+                || format!("write {writes}"),
+            ));
         }
         let denied_reads = format_file_system_entry_paths(
             file_system
@@ -989,7 +1048,12 @@ pub(crate) fn format_additional_permissions_rule(
                 .filter(|entry| entry.access == FileSystemAccessMode::Deny),
         );
         if !denied_reads.is_empty() {
-            parts.push(format!("deny read {denied_reads}"));
+            parts.push(crate::i18n::global().text_with_string_arg(
+                "approval-permission-deny-read",
+                "paths",
+                denied_reads.clone(),
+                || format!("deny read {denied_reads}"),
+            ));
         }
     }
     if parts.is_empty() {

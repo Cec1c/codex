@@ -1,8 +1,55 @@
+use crate::status::RateLimitSnapshotDisplay;
 use chrono::DateTime;
 use chrono::Local;
 use chrono::Utc;
 use codex_app_server_protocol::RateLimitResetCreditStatus;
 use codex_app_server_protocol::RateLimitResetCreditsSummary;
+use codex_app_server_protocol::RateLimitResetType;
+use codex_protocol::account::PlanType;
+use std::collections::BTreeMap;
+
+use super::rate_limits::get_limits_duration;
+
+fn reset_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum RateLimitResetScope {
+    Monthly,
+    WeeklyAndFiveHour,
+    Unknown,
+}
+
+impl RateLimitResetScope {
+    pub(super) fn picker_label(&self) -> String {
+        match self {
+            Self::Monthly => reset_text("usage-reset-scope-monthly", "Full reset (Monthly)"),
+            Self::WeeklyAndFiveHour => reset_text(
+                "usage-reset-scope-weekly-five-hour",
+                "Full reset (Weekly + 5h)",
+            ),
+            Self::Unknown => reset_text("usage-reset-scope-full", "Full reset"),
+        }
+    }
+
+    pub(super) fn usage_description(&self) -> String {
+        match self {
+            Self::Monthly => reset_text(
+                "usage-reset-description-monthly",
+                "Reset your current monthly usage limit.",
+            ),
+            Self::WeeklyAndFiveHour => reset_text(
+                "usage-reset-description-weekly-five-hour",
+                "Reset your current 5-hour and weekly usage limits.",
+            ),
+            Self::Unknown => reset_text(
+                "usage-reset-description-full",
+                "Reset your current usage limits.",
+            ),
+        }
+    }
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct ResetCreditOption {
@@ -12,8 +59,36 @@ pub(super) struct ResetCreditOption {
     pub(super) description: String,
 }
 
+pub(super) fn rate_limit_reset_scope(
+    rate_limits: &BTreeMap<String, RateLimitSnapshotDisplay>,
+    plan_type: Option<PlanType>,
+) -> RateLimitResetScope {
+    let window_labels = rate_limits
+        .iter()
+        .find(|(limit_id, _)| limit_id.eq_ignore_ascii_case("codex"))
+        .into_iter()
+        .flat_map(|(_, snapshot)| [snapshot.primary.as_ref(), snapshot.secondary.as_ref()])
+        .flatten()
+        .filter_map(|window| window.window_minutes.and_then(get_limits_duration))
+        .collect::<Vec<_>>();
+
+    if window_labels.iter().any(|label| label == "monthly")
+        || matches!(plan_type, Some(PlanType::Free | PlanType::Go))
+    {
+        RateLimitResetScope::Monthly
+    } else if window_labels
+        .iter()
+        .any(|label| label == "5h" || label == "weekly")
+    {
+        RateLimitResetScope::WeeklyAndFiveHour
+    } else {
+        RateLimitResetScope::Unknown
+    }
+}
+
 pub(super) fn reset_credit_options(
     summary: &RateLimitResetCreditsSummary,
+    scope: RateLimitResetScope,
 ) -> Vec<ResetCreditOption> {
     let available_count = summary.available_count.max(0);
     let detail_limit = usize::try_from(available_count).unwrap_or(usize::MAX);
@@ -33,33 +108,48 @@ pub(super) fn reset_credit_options(
             let expiration = match credit.expires_at {
                 Some(expires_at) => DateTime::<Utc>::from_timestamp(expires_at, 0)
                     .map(|expires_at| {
-                        format!(
-                            "Expires {}",
-                            expires_at
-                                .with_timezone(&Local)
-                                .format("%H:%M on %-d %b %Y")
+                        let expiration = expires_at
+                            .with_timezone(&Local)
+                            .format("%H:%M on %-d %b %Y")
+                            .to_string();
+                        crate::i18n::global().text_with_string_arg(
+                            "usage-reset-expires",
+                            "expiration",
+                            expiration.clone(),
+                            || format!("Expires {expiration}"),
                         )
                     })
-                    .unwrap_or_else(|| "Expiration unavailable".to_string()),
-                None => "Does not expire".to_string(),
+                    .unwrap_or_else(|| {
+                        reset_text(
+                            "usage-reset-expiration-unavailable",
+                            "Expiration unavailable",
+                        )
+                    }),
+                None => reset_text("usage-reset-does-not-expire", "Does not expire"),
             };
             let reset_title = credit
                 .title
                 .as_deref()
                 .map(str::trim)
                 .filter(|title| !title.is_empty())
-                .unwrap_or("Full reset");
+                .map(str::to_string)
+                .unwrap_or_else(|| match credit.reset_type {
+                    RateLimitResetType::CodexRateLimits | RateLimitResetType::Unknown => {
+                        scope.picker_label()
+                    }
+                });
             let reset_description = credit
                 .description
                 .as_deref()
                 .map(str::trim)
                 .filter(|description| !description.is_empty())
-                .unwrap_or("Reset your current usage limits.");
+                .map(str::to_string)
+                .unwrap_or_else(|| scope.usage_description());
             ResetCreditOption {
                 credit_id: Some(credit.id.clone()),
-                name: reset_title.to_string(),
+                name: reset_title,
                 detail: Some(format!("{expiration}.")),
-                description: reset_description.to_string(),
+                description: reset_description,
             }
         })
         .collect::<Vec<_>>();
@@ -67,9 +157,9 @@ pub(super) fn reset_credit_options(
     if options.is_empty() {
         options.push(ResetCreditOption {
             credit_id: None,
-            name: "Full reset".to_string(),
+            name: reset_text("usage-use-reset", "Use a reset"),
             detail: None,
-            description: "Reset your current usage limits.".to_string(),
+            description: scope.usage_description(),
         });
     }
 
