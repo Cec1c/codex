@@ -175,7 +175,7 @@ where
 ///
 /// `status_line_from_segments` emits one span per value with one separator span between values.
 /// Removing two spans at a time therefore preserves the most important leading items and avoids
-/// half-visible progress bars, timers, or quota values on narrow terminals. The default CCU order
+/// half-visible progress bars or timers on narrow terminals. The default CCU order
 /// intentionally places progressively less essential items to the right.
 pub(crate) fn fit_status_line_to_width(mut line: Line<'static>, max_width: usize) -> Line<'static> {
     if line.width() <= max_width {
@@ -370,18 +370,16 @@ mod tests {
     #[test]
     fn responsive_status_line_drops_complete_trailing_segments() {
         let line = Line::from(vec![
-            "deepseek-v4-pro[1m]".cyan(),
+            "🦊 gpt-5.6-sol[xhigh]".cyan(),
             " │ ".dim(),
-            "0/1.0M".green(),
+            "42.7K/353K".green(),
             " │ ".dim(),
-            "[░░░░░░░░░░] 0%".green(),
+            "[█░░░░░░░░░] 9%".green(),
             " │ ".dim(),
             "⏱ 1s ⚡0s".cyan(),
-            " │ ".dim(),
-            "17.96 CNY".magenta(),
         ]);
 
-        let rendered = [80, 58, 36, 16]
+        let rendered = [72, 60, 40, 16]
             .into_iter()
             .map(|width| {
                 let fitted = fit_status_line_to_width(line.clone(), width);
