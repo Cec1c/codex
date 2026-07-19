@@ -6,6 +6,7 @@
 mod candidate;
 mod filter;
 mod footer;
+mod i18n;
 mod popup;
 mod render;
 mod search_catalog;

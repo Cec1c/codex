@@ -474,12 +474,11 @@ const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it l
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_STATUS_LINE_ITEMS: [&str; 2] = ["model-with-reasoning", "current-dir"];
-const CCU_STATUS_LINE_ITEMS: [&str; 5] = [
+const CCU_STATUS_LINE_ITEMS: [&str; 4] = [
     "model-with-reasoning",
     "context-tokens",
     "context-progress",
     "session-timing",
-    "quota",
 ];
 
 /// Common initialization parameters shared by all `ChatWidget` constructors.

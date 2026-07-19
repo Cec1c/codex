@@ -2,7 +2,7 @@
 source: tui/src/bottom_pane/status_line_style.rs
 expression: rendered
 ---
-80: deepseek-v4-pro[1m] │ 0/1.0M │ [░░░░░░░░░░] 0% │ ⏱ 1s ⚡0s │ 17.96 CNY
-58: deepseek-v4-pro[1m] │ 0/1.0M │ [░░░░░░░░░░] 0% │ ⏱ 1s ⚡0s
-36: deepseek-v4-pro[1m] │ 0/1.0M
-16: deepseek-v4-pro…
+72: 🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s
+60: 🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9%
+40: 🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K
+16: 🦊 gpt-5.6-sol[…
