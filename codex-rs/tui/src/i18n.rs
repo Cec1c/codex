@@ -147,8 +147,16 @@ pub(crate) fn active_locale() -> String {
 }
 
 pub(crate) fn save_language_preference(codex_home: &Path, input: &str) -> Result<String, String> {
-    let localizer = global();
     let root = language_pack_root(codex_home);
+    save_language_preference_with_root(codex_home, input, &root)
+}
+
+fn save_language_preference_with_root(
+    codex_home: &Path,
+    input: &str,
+    root: &Path,
+) -> Result<String, String> {
+    let localizer = global();
     let candidates = discover_language_packs(&root)?;
     let locale = if is_english_locale(input) {
         "en".to_string()

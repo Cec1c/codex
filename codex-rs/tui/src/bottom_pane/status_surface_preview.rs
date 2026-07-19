@@ -252,46 +252,109 @@ impl StatusSurfacePreviewData {
 }
 
 struct RateLimitPreviewCopy {
-    name: &'static str,
-    description: &'static str,
+    name: String,
+    description: String,
 }
 
 fn rate_limit_preview_copy(value: &str) -> Option<RateLimitPreviewCopy> {
     let value = value.trim_start();
     if value.starts_with("secondary usage ") {
         Some(RateLimitPreviewCopy {
-            name: "secondary-usage-limit",
-            description: "Remaining usage on the secondary usage limit (omitted when unavailable)",
+            name: crate::i18n::global().text("status-surface-secondary-usage-name", None, || {
+                "secondary-usage-limit".to_string()
+            }),
+            description: crate::i18n::global().text(
+                "status-surface-secondary-usage-description",
+                None,
+                || {
+                    "Remaining usage on the secondary usage limit (omitted when unavailable)"
+                        .to_string()
+                },
+            ),
         })
     } else if value.starts_with("usage ") {
         Some(RateLimitPreviewCopy {
-            name: "usage-limit",
-            description: "Remaining usage on the primary usage limit (omitted when unavailable)",
+            name: crate::i18n::global().text("status-surface-primary-usage-name", None, || {
+                "usage-limit".to_string()
+            }),
+            description: crate::i18n::global().text(
+                "status-surface-primary-usage-description",
+                None,
+                || {
+                    "Remaining usage on the primary usage limit (omitted when unavailable)"
+                        .to_string()
+                },
+            ),
         })
     } else if value.starts_with("5h ") {
         Some(RateLimitPreviewCopy {
-            name: "five-hour-limit",
-            description: "Remaining usage on the 5-hour usage limit (omitted when unavailable)",
+            name: crate::i18n::global().text("status-surface-five-hour-name", None, || {
+                "five-hour-limit".to_string()
+            }),
+            description: crate::i18n::global().text(
+                "status-surface-five-hour-description",
+                None,
+                || {
+                    "Remaining usage on the 5-hour usage limit (omitted when unavailable)"
+                        .to_string()
+                },
+            ),
         })
     } else if value.starts_with("daily ") {
         Some(RateLimitPreviewCopy {
-            name: "daily-limit",
-            description: "Remaining usage on the daily usage limit (omitted when unavailable)",
+            name: crate::i18n::global().text("status-surface-daily-name", None, || {
+                "daily-limit".to_string()
+            }),
+            description: crate::i18n::global().text(
+                "status-surface-daily-description",
+                None,
+                || {
+                    "Remaining usage on the daily usage limit (omitted when unavailable)"
+                        .to_string()
+                },
+            ),
         })
     } else if value.starts_with("weekly ") {
         Some(RateLimitPreviewCopy {
-            name: "weekly-limit",
-            description: "Remaining usage on the weekly usage limit (omitted when unavailable)",
+            name: crate::i18n::global().text("status-surface-weekly-name", None, || {
+                "weekly-limit".to_string()
+            }),
+            description: crate::i18n::global().text(
+                "status-surface-weekly-description",
+                None,
+                || {
+                    "Remaining usage on the weekly usage limit (omitted when unavailable)"
+                        .to_string()
+                },
+            ),
         })
     } else if value.starts_with("monthly ") {
         Some(RateLimitPreviewCopy {
-            name: "monthly-limit",
-            description: "Remaining usage on the monthly usage limit (omitted when unavailable)",
+            name: crate::i18n::global().text("status-surface-monthly-name", None, || {
+                "monthly-limit".to_string()
+            }),
+            description: crate::i18n::global().text(
+                "status-surface-monthly-description",
+                None,
+                || {
+                    "Remaining usage on the monthly usage limit (omitted when unavailable)"
+                        .to_string()
+                },
+            ),
         })
     } else if value.starts_with("annual ") {
         Some(RateLimitPreviewCopy {
-            name: "annual-limit",
-            description: "Remaining usage on the annual usage limit (omitted when unavailable)",
+            name: crate::i18n::global().text("status-surface-annual-name", None, || {
+                "annual-limit".to_string()
+            }),
+            description: crate::i18n::global().text(
+                "status-surface-annual-description",
+                None,
+                || {
+                    "Remaining usage on the annual usage limit (omitted when unavailable)"
+                        .to_string()
+                },
+            ),
         })
     } else {
         None

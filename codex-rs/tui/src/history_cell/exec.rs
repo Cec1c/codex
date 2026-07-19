@@ -128,11 +128,30 @@ impl HistoryCell for UnifiedExecProcessesCell {
         let wrap_width = width as usize;
         let max_processes = 16usize;
         let mut out: Vec<Line<'static>> = Vec::new();
-        out.push(vec!["Background terminals".bold()].into());
+        out.push(
+            vec![
+                crate::i18n::global()
+                    .text("ps-background-terminals-title", None, || {
+                        "Background terminals".to_string()
+                    })
+                    .bold(),
+            ]
+            .into(),
+        );
         out.push("".into());
 
         if self.processes.is_empty() {
-            out.push("  • No background terminals running.".italic().into());
+            out.push(
+                vec![
+                    "  • ".into(),
+                    crate::i18n::global()
+                        .text("ps-no-background-terminals", None, || {
+                            "No background terminals running.".to_string()
+                        })
+                        .italic(),
+                ]
+                .into(),
+            );
             return out;
         }
 

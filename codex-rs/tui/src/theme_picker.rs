@@ -137,6 +137,10 @@ const PREVIEW_FRAME_PADDING: u16 = 1;
 
 const PREVIEW_FALLBACK_SUBTITLE: &str = "Move up/down to live preview themes";
 
+fn theme_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 /// Side-by-side preview: syntax-highlighted Rust diff snippet, vertically
 /// centered with a 2-column left inset.  Fills the entire side panel height.
 struct ThemePreviewWideRenderable;
@@ -290,13 +294,18 @@ fn theme_picker_subtitle(codex_home: Option<&Path>, terminal_width: Option<u16>)
     if let Some(path) = themes_dir_display
         && path.starts_with('~')
     {
-        let subtitle = format!("Custom .tmTheme files can be added to the {path} directory.");
+        let subtitle = crate::i18n::global().text_with_string_arg(
+            "theme-picker-custom-directory",
+            "path",
+            path.clone(),
+            || format!("Custom .tmTheme files can be added to the {path} directory."),
+        );
         if UnicodeWidthStr::width(subtitle.as_str()) <= available_width {
             return subtitle;
         }
     }
 
-    PREVIEW_FALLBACK_SUBTITLE.to_string()
+    theme_text("theme-picker-preview-hint", PREVIEW_FALLBACK_SUBTITLE)
 }
 
 /// Builds [`SelectionViewParams`] for the `/theme` picker dialog.
@@ -339,7 +348,12 @@ pub(crate) fn build_theme_picker_params(
         .enumerate()
         .map(|(idx, entry)| {
             let display_name = if entry.is_custom {
-                format!("{} (custom)", entry.name)
+                crate::i18n::global().text_with_string_arg(
+                    "theme-picker-custom-name",
+                    "name",
+                    entry.name.clone(),
+                    || format!("{} (custom)", entry.name),
+                )
             } else {
                 entry.name.clone()
             };
@@ -388,7 +402,7 @@ pub(crate) fn build_theme_picker_params(
         }) as Box<dyn Fn(&crate::app_event_sender::AppEventSender) + Send + Sync>,
     );
     SelectionViewParams {
-        title: Some("Select Syntax Theme".to_string()),
+        title: Some(theme_text("theme-picker-title", "Select Syntax Theme")),
         subtitle: Some(theme_picker_subtitle(
             codex_home_owned.as_deref(),
             terminal_width,
@@ -396,7 +410,10 @@ pub(crate) fn build_theme_picker_params(
         footer_hint: Some(standard_popup_hint_line()),
         items,
         is_searchable: true,
-        search_placeholder: Some("Type to filter themes...".to_string()),
+        search_placeholder: Some(theme_text(
+            "theme-picker-search-placeholder",
+            "Type to filter themes...",
+        )),
         initial_selected_idx: initial_idx,
         side_content: Box::new(ThemePreviewWideRenderable),
         side_content_width: SideContentWidth::Half,

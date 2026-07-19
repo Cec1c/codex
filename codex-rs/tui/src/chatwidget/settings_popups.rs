@@ -5,6 +5,10 @@
 
 use super::*;
 
+fn personality_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 impl ChatWidget {
     pub(super) fn open_theme_picker(&mut self) {
         let codex_home = codex_utils_home_dir::find_codex_home().ok();
@@ -23,15 +27,25 @@ impl ChatWidget {
     pub(crate) fn open_personality_popup(&mut self) {
         if !self.is_session_configured() {
             self.add_info_message(
-                "Personality selection is disabled until startup completes.".to_string(),
+                personality_text(
+                    "personality-picker-startup-disabled",
+                    "Personality selection is disabled until startup completes.",
+                ),
                 /*hint*/ None,
             );
             return;
         }
         if !self.current_model_supports_personality() {
             let current_model = self.current_model();
-            self.add_error_message(format!(
-                "Current model ({current_model}) doesn't support personalities. Try /model to pick a different model."
+            self.add_error_message(crate::i18n::global().text_with_string_arg(
+                "personality-picker-unsupported-model",
+                "model",
+                current_model,
+                || {
+                    format!(
+                        "Current model ({current_model}) doesn't support personalities. Try /model to pick a different model."
+                    )
+                },
             ));
             return;
         }
@@ -46,8 +60,8 @@ impl ChatWidget {
         let items: Vec<SelectionItem> = personalities
             .into_iter()
             .map(|personality| {
-                let name = Self::personality_label(personality).to_string();
-                let description = Some(Self::personality_description(personality).to_string());
+                let name = Self::personality_label(personality);
+                let description = Some(Self::personality_description(personality));
                 let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
                     tx.send(AppEvent::CodexOp(AppCommand::override_turn_context(
                         /*cwd*/ None,
@@ -79,8 +93,16 @@ impl ChatWidget {
             .collect();
 
         let mut header = ColumnRenderable::new();
-        header.push(Line::from("Select Personality".bold()));
-        header.push(Line::from("Choose a communication style for Codex.".dim()));
+        header.push(Line::from(
+            personality_text("personality-picker-title", "Select Personality").bold(),
+        ));
+        header.push(Line::from(
+            personality_text(
+                "personality-picker-subtitle",
+                "Choose a communication style for Codex.",
+            )
+            .dim(),
+        ));
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
@@ -113,19 +135,28 @@ impl ChatWidget {
         self.bottom_pane.show_view(Box::new(view));
     }
 
-    fn personality_label(personality: Personality) -> &'static str {
+    fn personality_label(personality: Personality) -> String {
         match personality {
-            Personality::None => "None",
-            Personality::Friendly => "Friendly",
-            Personality::Pragmatic => "Pragmatic",
+            Personality::None => personality_text("personality-none", "None"),
+            Personality::Friendly => personality_text("personality-friendly", "Friendly"),
+            Personality::Pragmatic => personality_text("personality-pragmatic", "Pragmatic"),
         }
     }
 
-    fn personality_description(personality: Personality) -> &'static str {
+    fn personality_description(personality: Personality) -> String {
         match personality {
-            Personality::None => "No personality instructions.",
-            Personality::Friendly => "Warm, collaborative, and helpful.",
-            Personality::Pragmatic => "Concise, task-focused, and direct.",
+            Personality::None => personality_text(
+                "personality-none-description",
+                "No personality instructions.",
+            ),
+            Personality::Friendly => personality_text(
+                "personality-friendly-description",
+                "Warm, collaborative, and helpful.",
+            ),
+            Personality::Pragmatic => personality_text(
+                "personality-pragmatic-description",
+                "Concise, task-focused, and direct.",
+            ),
         }
     }
 }

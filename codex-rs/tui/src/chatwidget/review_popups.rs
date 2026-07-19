@@ -2,13 +2,17 @@
 
 use super::*;
 
+fn review_popup_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 impl ChatWidget {
     pub(crate) fn open_review_popup(&mut self) {
         let mut items: Vec<SelectionItem> = Vec::new();
 
         items.push(SelectionItem {
-            name: "Review against a base branch".to_string(),
-            description: Some("(PR Style)".into()),
+            name: review_popup_text("review-picker-base-branch", "Review against a base branch"),
+            description: Some(review_popup_text("review-picker-pr-style", "(PR Style)")),
             actions: vec![Box::new({
                 let cwd = self.config.cwd.to_path_buf();
                 move |tx| {
@@ -21,7 +25,7 @@ impl ChatWidget {
         });
 
         items.push(SelectionItem {
-            name: "Review uncommitted changes".to_string(),
+            name: review_popup_text("review-picker-uncommitted", "Review uncommitted changes"),
             actions: vec![Box::new(move |tx: &AppEventSender| {
                 tx.review(ReviewTarget::UncommittedChanges);
             })],
@@ -30,7 +34,7 @@ impl ChatWidget {
         });
 
         items.push(SelectionItem {
-            name: "Review a commit".to_string(),
+            name: review_popup_text("review-picker-commit", "Review a commit"),
             actions: vec![Box::new({
                 let cwd = self.config.cwd.to_path_buf();
                 move |tx| {
@@ -43,7 +47,10 @@ impl ChatWidget {
         });
 
         items.push(SelectionItem {
-            name: "Custom review instructions".to_string(),
+            name: review_popup_text(
+                "review-picker-custom-instructions",
+                "Custom review instructions",
+            ),
             actions: vec![Box::new(move |tx| {
                 tx.send(AppEvent::OpenReviewCustomPrompt);
             })],
@@ -53,7 +60,10 @@ impl ChatWidget {
         });
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select a review preset".into()),
+            title: Some(review_popup_text(
+                "review-picker-title",
+                "Select a review preset",
+            )),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             ..Default::default()
@@ -64,7 +74,7 @@ impl ChatWidget {
         let branches = local_git_branches(cwd).await;
         let current_branch = current_branch_name(cwd)
             .await
-            .unwrap_or_else(|| "(detached HEAD)".to_string());
+            .unwrap_or_else(|| review_popup_text("review-picker-detached-head", "(detached HEAD)"));
         let mut items: Vec<SelectionItem> = Vec::with_capacity(branches.len());
 
         for option in branches {
@@ -83,11 +93,17 @@ impl ChatWidget {
         }
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select a base branch".to_string()),
+            title: Some(review_popup_text(
+                "review-picker-base-branch-title",
+                "Select a base branch",
+            )),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             is_searchable: true,
-            search_placeholder: Some("Type to search branches".to_string()),
+            search_placeholder: Some(review_popup_text(
+                "search-placeholder-branches",
+                "Type to search branches",
+            )),
             ..Default::default()
         });
     }
@@ -116,11 +132,17 @@ impl ChatWidget {
         }
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select a commit to review".to_string()),
+            title: Some(review_popup_text(
+                "review-picker-commit-title",
+                "Select a commit to review",
+            )),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             is_searchable: true,
-            search_placeholder: Some("Type to search commits".to_string()),
+            search_placeholder: Some(review_popup_text(
+                "search-placeholder-commits",
+                "Type to search commits",
+            )),
             ..Default::default()
         });
     }
@@ -128,8 +150,14 @@ impl ChatWidget {
     pub(crate) fn show_review_custom_prompt(&mut self) {
         let tx = self.app_event_tx.clone();
         let view = CustomPromptView::new(
-            "Custom review instructions".to_string(),
-            "Type instructions and press Enter".to_string(),
+            review_popup_text(
+                "review-picker-custom-instructions",
+                "Custom review instructions",
+            ),
+            review_popup_text(
+                "review-picker-custom-placeholder",
+                "Type instructions and press Enter",
+            ),
             /*initial_text*/ String::new(),
             /*context_label*/ None,
             Box::new(move |prompt: String| {
@@ -172,11 +200,17 @@ pub(crate) fn show_review_commit_picker_with_entries(
     }
 
     chat.bottom_pane.show_selection_view(SelectionViewParams {
-        title: Some("Select a commit to review".to_string()),
+        title: Some(review_popup_text(
+            "review-picker-commit-title",
+            "Select a commit to review",
+        )),
         footer_hint: Some(standard_popup_hint_line()),
         items,
         is_searchable: true,
-        search_placeholder: Some("Type to search commits".to_string()),
+        search_placeholder: Some(review_popup_text(
+            "search-placeholder-commits",
+            "Type to search commits",
+        )),
         ..Default::default()
     });
 }
