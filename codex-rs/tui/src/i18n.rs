@@ -157,7 +157,7 @@ fn save_language_preference_with_root(
     root: &Path,
 ) -> Result<String, String> {
     let localizer = global();
-    let candidates = discover_language_packs(&root)?;
+    let candidates = discover_language_packs(root)?;
     let locale = if is_english_locale(input) {
         "en".to_string()
     } else if let Some(candidate) = resolve_language_pack(input, &candidates) {

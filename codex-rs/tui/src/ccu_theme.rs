@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -10,6 +11,7 @@ use serde::Deserialize;
 use crate::terminal_palette::best_color;
 
 const DEFAULT_THEME_ID: &str = "ccu.deepseek";
+const STATUS_LINE_PRESET_FILE: &str = "ui-statusline-preset";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +74,12 @@ static THEME: OnceLock<Option<CcuTheme>> = OnceLock::new();
 
 pub(crate) fn active() -> Option<&'static CcuTheme> {
     THEME.get_or_init(load_theme).as_ref()
+}
+
+pub(crate) fn status_line_preset_enabled(codex_home: &Path) -> bool {
+    fs::read_to_string(codex_home.join(STATUS_LINE_PRESET_FILE))
+        .ok()
+        .is_some_and(|value| value.trim() == DEFAULT_THEME_ID)
 }
 
 fn load_theme() -> Option<CcuTheme> {
@@ -319,5 +327,25 @@ mod tests {
     fn default_progress_has_ten_cells() {
         assert_eq!(render_progress(0), "[░░░░░░░░░░] 0%");
         assert_eq!(render_progress(50), "[█████░░░░░] 50%");
+    }
+
+    #[test]
+    fn status_line_preset_requires_an_explicit_matching_preference() {
+        let codex_home = tempfile::tempdir().expect("temp codex home");
+        assert!(!status_line_preset_enabled(codex_home.path()));
+
+        fs::write(
+            codex_home.path().join(STATUS_LINE_PRESET_FILE),
+            "ccu.deepseek\n",
+        )
+        .expect("write CCU status-line preference");
+        assert!(status_line_preset_enabled(codex_home.path()));
+
+        fs::write(
+            codex_home.path().join(STATUS_LINE_PRESET_FILE),
+            "future.theme",
+        )
+        .expect("write unknown status-line preference");
+        assert!(!status_line_preset_enabled(codex_home.path()));
     }
 }

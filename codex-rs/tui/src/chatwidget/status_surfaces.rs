@@ -515,10 +515,12 @@ impl ChatWidget {
 
     pub(super) fn configured_status_line_items(&self) -> Vec<String> {
         self.config.tui_status_line.clone().unwrap_or_else(|| {
-            DEFAULT_STATUS_LINE_ITEMS
-                .iter()
-                .map(ToString::to_string)
-                .collect()
+            let defaults = if self.ccu_status_line_preset_enabled {
+                &CCU_STATUS_LINE_ITEMS[..]
+            } else {
+                &DEFAULT_STATUS_LINE_ITEMS[..]
+            };
+            defaults.iter().map(ToString::to_string).collect()
         })
     }
 

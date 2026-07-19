@@ -209,7 +209,7 @@ impl StatusSurfacePreviewData {
     ) -> String {
         self.live_value_for(item)
             .and_then(rate_limit_preview_copy)
-            .map(|copy| copy.name.to_string())
+            .map(|copy| copy.name)
             .unwrap_or_else(|| fallback.to_string())
     }
 
@@ -220,7 +220,7 @@ impl StatusSurfacePreviewData {
     ) -> String {
         self.live_value_for(item)
             .and_then(rate_limit_preview_copy)
-            .map(|copy| copy.description.to_string())
+            .map(|copy| copy.description)
             .unwrap_or_else(|| fallback.to_string())
     }
 
