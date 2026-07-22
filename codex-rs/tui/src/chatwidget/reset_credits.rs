@@ -22,7 +22,7 @@ pub(super) enum RateLimitResetScope {
 }
 
 impl RateLimitResetScope {
-    pub(super) fn picker_label(&self) -> String {
+    pub(super) fn picker_label(self) -> String {
         match self {
             Self::Monthly => reset_text("usage-reset-scope-monthly", "Full reset (Monthly)"),
             Self::WeeklyAndFiveHour => reset_text(
@@ -33,7 +33,7 @@ impl RateLimitResetScope {
         }
     }
 
-    pub(super) fn usage_description(&self) -> String {
+    pub(super) fn usage_description(self) -> String {
         match self {
             Self::Monthly => reset_text(
                 "usage-reset-description-monthly",
@@ -86,7 +86,14 @@ pub(super) fn rate_limit_reset_scope(
     }
 }
 
+#[cfg(test)]
 pub(super) fn reset_credit_options(
+    summary: &RateLimitResetCreditsSummary,
+) -> Vec<ResetCreditOption> {
+    reset_credit_options_for_scope(summary, RateLimitResetScope::Unknown)
+}
+
+pub(super) fn reset_credit_options_for_scope(
     summary: &RateLimitResetCreditsSummary,
     scope: RateLimitResetScope,
 ) -> Vec<ResetCreditOption> {

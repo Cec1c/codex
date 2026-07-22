@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use uuid::Uuid;
 
 use super::reset_credits::rate_limit_reset_scope;
-use super::reset_credits::reset_credit_options;
+use super::reset_credits::reset_credit_options_for_scope;
 use super::*;
 
 const USAGE_MENU_VIEW_ID: &str = "usage-menu";
@@ -203,7 +203,7 @@ impl ChatWidget {
     ) -> SelectionViewParams {
         let confirmation_gate = Arc::new(AtomicBool::new(true));
         let scope = rate_limit_reset_scope(&self.rate_limit_snapshots_by_limit_id, self.plan_type);
-        let mut items = reset_credit_options(reset_credits, scope)
+        let mut items = reset_credit_options_for_scope(reset_credits, scope)
             .into_iter()
             .map(|option| {
                 let confirmation_gate = confirmation_gate.clone();
