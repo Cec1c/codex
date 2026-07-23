@@ -33,6 +33,7 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     permissions:
+      actions: write
       contents: write
       issues: write
     outputs:
@@ -77,10 +78,15 @@ jobs:
             echo "Revision must be a positive integer" >&2
             exit 1
           }
+          git check-ref-format --branch "$PATCH_REF" >/dev/null || {
+            echo "Patch ref must be a valid branch name" >&2
+            exit 1
+          }
 
           display_version="${upstream_version}-ccu.i18n.${revision}"
           release_tag="ccu-rust-v${upstream_version}-r${revision}"
           release_branch="ccu/release/${upstream_version}-r${revision}"
+          agent_base_branch="ccu/agent-base/${upstream_version}-r${revision}"
 
           if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $release_tag already exists; nothing to do."
@@ -92,6 +98,7 @@ jobs:
           git fetch --no-tags upstream main
           git fetch --no-tags upstream "refs/tags/$upstream_tag:refs/tags/$upstream_tag"
           upstream_commit="$(git rev-list -n 1 "$upstream_tag")"
+          upstream_main_commit="$(git rev-parse refs/remotes/upstream/main)"
 
           if [[ -n "$PREPARED_REF" ]]; then
             if [[ "$PREPARED_REF" != "$release_branch" ]]; then
@@ -109,6 +116,19 @@ jobs:
               echo "Prepared ref $PREPARED_REF must contain only linear release patches" >&2
               exit 1
             fi
+            invalid_paths="$(
+              git diff --name-only "$upstream_commit..$prepared_commit" |
+                grep -Ev '^(codex-rs/|\.github/scripts/ccu-package-release\.ps1$)' || true
+            )"
+            if [[ -n "$invalid_paths" ]]; then
+              echo "Prepared ref modifies paths outside the release allowlist:" >&2
+              echo "$invalid_paths" >&2
+              exit 1
+            fi
+            if git diff --quiet "$upstream_commit..$prepared_commit" -- codex-rs; then
+              echo "Prepared ref contains no codex-rs changes" >&2
+              exit 1
+            fi
             {
               echo "should_release=true"
               echo "upstream_version=$upstream_version"
@@ -124,6 +144,7 @@ jobs:
           fi
 
           git fetch --no-tags origin "$PATCH_REF:refs/remotes/origin/ccu-patch-source"
+          patch_commit="$(git rev-parse refs/remotes/origin/ccu-patch-source)"
 
           mapfile -t patch_commits < <(
             git rev-list --reverse --no-merges \
@@ -149,23 +170,122 @@ jobs:
               git cherry-pick --abort || true
               title="[CCU sync] $release_tag needs manual rebase"
               body_file="$(mktemp)"
+              conflict_paths_json="$(
+                printf '%s\n' "$conflicts" |
+                  jq -Rsc 'split("\n") | map(select(length > 0))'
+              )"
+              metadata="$(
+                jq -nc \
+                  --arg upstream_version "$upstream_version" \
+                  --arg upstream_tag "$upstream_tag" \
+                  --arg upstream_commit "$upstream_commit" \
+                  --arg upstream_main_commit "$upstream_main_commit" \
+                  --arg revision "$revision" \
+                  --arg release_tag "$release_tag" \
+                  --arg release_branch "$release_branch" \
+                  --arg agent_base_branch "$agent_base_branch" \
+                  --arg patch_ref "$PATCH_REF" \
+                  --arg patch_commit "$patch_commit" \
+                  --arg failed_commit "$commit" \
+                  --argjson conflict_paths "$conflict_paths_json" \
+                  '{
+                    schema_version: 1,
+                    upstream_version: $upstream_version,
+                    upstream_tag: $upstream_tag,
+                    upstream_commit: $upstream_commit,
+                    upstream_main_commit: $upstream_main_commit,
+                    revision: ($revision | tonumber),
+                    release_tag: $release_tag,
+                    release_branch: $release_branch,
+                    agent_base_branch: $agent_base_branch,
+                    patch_ref: $patch_ref,
+                    patch_commit: $patch_commit,
+                    failed_commit: $failed_commit,
+                    conflict_paths: $conflict_paths
+                  }'
+              )"
+
+              remote_base_commit="$(
+                git ls-remote origin "refs/heads/$agent_base_branch" | awk '{print $1}'
+              )"
+              if [[ -n "$remote_base_commit" && "$remote_base_commit" != "$upstream_commit" ]]; then
+                echo "Agent base branch exists at a different commit; refusing to overwrite it." >&2
+                exit 1
+              fi
+              if [[ -z "$remote_base_commit" ]]; then
+                git push origin "$upstream_commit:refs/heads/$agent_base_branch"
+              fi
+
+              gh label create ccu-sync-conflict \
+                --repo "$GITHUB_REPOSITORY" \
+                --color D93F0B \
+                --description "Upstream replay requires agentic conflict resolution" \
+                --force
+              gh label create ccu-agent-resolution \
+                --repo "$GITHUB_REPOSITORY" \
+                --color 5319E7 \
+                --description "Prepared by the CCU conflict resolver" \
+                --force
+              gh label create ccu-agent-prepared \
+                --repo "$GITHUB_REPOSITORY" \
+                --color 1D76DB \
+                --description "Agent prepared a release branch for deterministic CI" \
+                --force
+              gh label create ccu-agent-resolved \
+                --repo "$GITHUB_REPOSITORY" \
+                --color 0E8A16 \
+                --description "Deterministic release completed after agent resolution" \
+                --force
+              gh label create ccu-upstream-i18n \
+                --repo "$GITHUB_REPOSITORY" \
+                --color FBCA04 \
+                --description "Upstream may now provide an official i18n interface" \
+                --force
+
               {
+                echo "<!-- ccu-sync-metadata:$metadata -->"
+                echo
                 echo "Automatic replay of fork commit \`$commit\` onto \`$upstream_tag\` failed."
                 echo
                 echo "Patch source: \`$PATCH_REF\`"
+                echo "Patch commit: \`$patch_commit\`"
                 echo "Upstream commit: \`$upstream_commit\`"
+                echo "Upstream main snapshot: \`$upstream_main_commit\`"
+                echo "Agent base branch: \`$agent_base_branch\`"
+                echo "Expected release branch: \`$release_branch\`"
                 echo
                 echo "Conflicted paths:"
                 echo '```text'
                 echo "${conflicts:-unknown}"
                 echo '```'
                 echo
-                echo "The workflow stopped without updating an existing release or force-pushing a branch."
+                echo "The release branch was not created or overwritten. The CCU conflict resolver will inspect upstream i18n support and either prepare a reviewed release branch or mark this issue for migration."
               } > "$body_file"
-              if ! gh issue list --repo "$GITHUB_REPOSITORY" --state open \
-                --search "\"$title\" in:title" --json number --jq 'length > 0' | grep -qx true; then
-                gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body_file"
+              issue_number="$(
+                gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+                  --json number,title |
+                  jq -r --arg title "$title" '.[] | select(.title == $title) | .number' |
+                  head -n 1
+              )"
+              if [[ -z "$issue_number" ]]; then
+                issue_url="$(
+                  gh issue create --repo "$GITHUB_REPOSITORY" \
+                    --title "$title" \
+                    --body-file "$body_file" \
+                    --label ccu-sync-conflict
+                )"
+                issue_number="${issue_url##*/}"
+              else
+                gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                  --body-file "$body_file" \
+                  --add-label ccu-sync-conflict
               fi
+
+              gh workflow run ccu-conflict-resolver.lock.yml \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref "${{ github.event.repository.default_branch }}" \
+                -f "issue_number=$issue_number"
+              echo "Dispatched CCU conflict resolver for issue #$issue_number" >&2
               exit 1
             fi
           done
@@ -281,6 +401,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -296,6 +418,7 @@ jobs:
           UPSTREAM_TAG: ${{ needs.prepare.outputs.upstream_tag }}
           UPSTREAM_COMMIT: ${{ needs.prepare.outputs.upstream_commit }}
           FORK_COMMIT: ${{ needs.prepare.outputs.fork_commit }}
+          RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
         run: |
           set -euo pipefail
           cat > release-notes.md <<EOF
@@ -313,3 +436,27 @@ jobs:
             --title "$DISPLAY_VERSION" \
             --notes-file release-notes.md \
             --latest
+
+          conflict_title="[CCU sync] $RELEASE_TAG needs manual rebase"
+          issue_number="$(
+            gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+              --json number,title |
+              jq -r --arg title "$conflict_title" '.[] | select(.title == $title) | .number' |
+              head -n 1
+          )"
+          if [[ -n "$issue_number" ]]; then
+            gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
+              --add-label ccu-agent-resolved
+            gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY" \
+              --reason completed \
+              --comment "Deterministic validation and release completed: \`$RELEASE_TAG\`."
+          fi
+
+          pr_number="$(
+            gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+              --head "$RELEASE_BRANCH" --json number --jq '.[0].number // empty'
+          )"
+          if [[ -n "$pr_number" ]]; then
+            gh pr close "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              --comment "Release branch validated and published as \`$RELEASE_TAG\`; closing this audit PR without merging it into the agent base branch."
+          fi
