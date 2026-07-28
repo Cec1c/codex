@@ -1264,7 +1264,7 @@ See the Codex keymap documentation for supported actions and examples."
             token_usage: app.token_usage(),
             thread_id,
             resume_hint,
-            update_action: app.pending_update_action,
+            update_action: app.pending_update_action.clone(),
             exit_reason,
         })
     }

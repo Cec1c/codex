@@ -1,0 +1,15 @@
+---
+source: tui/src/update_prompt.rs
+expression: terminal.backend()
+---
+
+  ✨ 发现 CCU 新版本！ 0.1.4 -> 0.1.5
+
+  发行说明：
+  https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.5
+
+› 1. 升级（打开 CCU Manager 并自动开始）                                                
+  2. 跳过
+  3. 跳过此版本
+
+  按 enter 继续；下载进度将在 Manager 中显示
