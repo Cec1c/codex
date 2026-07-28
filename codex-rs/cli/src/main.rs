@@ -745,7 +745,7 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
         ExitReason::UserRequested => false,
     };
 
-    let update_action = exit_info.update_action;
+    let update_action = exit_info.update_action.clone();
     let color_enabled = supports_color::on(Stream::Stdout).is_some();
     for line in format_exit_messages(exit_info, color_enabled) {
         println!("{line}");
@@ -764,12 +764,20 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
 fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     println!();
     let cmd_str = action.command_str();
-    println!("Updating Codex via `{cmd_str}`...");
+    let ccu_managed = matches!(&action, UpdateAction::CcuManager { .. });
+    if ccu_managed {
+        println!("Opening CCU Manager via `{cmd_str}`...");
+    } else {
+        println!("Updating Codex via `{cmd_str}`...");
+    }
 
     let status = {
         #[cfg(windows)]
         {
-            if action == UpdateAction::StandaloneWindows {
+            if matches!(
+                &action,
+                UpdateAction::StandaloneWindows | UpdateAction::CcuManager { .. }
+            ) {
                 let (cmd, args) = action.command_args();
                 // Run the standalone PowerShell installer with PowerShell
                 // itself. Routing this through `cmd.exe /C` would parse
@@ -786,10 +794,10 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
         #[cfg(not(windows))]
         {
             let (cmd, args) = action.command_args();
-            let command_path = crate::wsl_paths::normalize_for_wsl(cmd);
+            let command_path = crate::wsl_paths::normalize_for_wsl(&cmd);
             let normalized_args: Vec<String> = args
                 .iter()
-                .map(crate::wsl_paths::normalize_for_wsl)
+                .map(|arg| crate::wsl_paths::normalize_for_wsl(arg))
                 .collect();
             std::process::Command::new(&command_path)
                 .args(&normalized_args)
@@ -799,7 +807,11 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     if !status.success() {
         anyhow::bail!("`{cmd_str}` failed with status {status}");
     }
-    println!("\n🎉 Update ran successfully! Please restart Codex.");
+    if ccu_managed {
+        println!("\nCCU Manager has taken over the verified upgrade and install handoff.");
+    } else {
+        println!("\n🎉 Update ran successfully! Please restart Codex.");
+    }
     Ok(())
 }
 

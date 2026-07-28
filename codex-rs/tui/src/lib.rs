@@ -101,6 +101,8 @@ mod ascii_animation;
 mod bottom_pane;
 mod branch_summary;
 mod ccu_theme;
+#[cfg(any(not(debug_assertions), test))]
+mod ccu_update;
 mod chatwidget;
 mod cli;
 mod clipboard_copy;
