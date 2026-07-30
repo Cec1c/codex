@@ -87,7 +87,8 @@ pub(crate) fn format_agent_picker_item_name(
     is_primary: bool,
 ) -> String {
     if is_primary {
-        return "Main [default]".to_string();
+        return crate::i18n::global()
+            .text("agent-picker-main", None, || "Main [default]".to_string());
     }
 
     let agent_nickname = agent_nickname
@@ -98,7 +99,9 @@ pub(crate) fn format_agent_picker_item_name(
         (Some(agent_nickname), Some(agent_role)) => format!("{agent_nickname} [{agent_role}]"),
         (Some(agent_nickname), None) => agent_nickname.to_string(),
         (None, Some(agent_role)) => format!("[{agent_role}]"),
-        (None, None) => "Agent".to_string(),
+        (None, None) => {
+            crate::i18n::global().text("agent-picker-agent", None, || "Agent".to_string())
+        }
     }
 }
 

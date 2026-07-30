@@ -98,12 +98,13 @@ impl Popup {
 
 impl WidgetRef for Popup {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
+        let empty_message = self.file_search.empty_message();
         render_popup(
             area,
             buf,
             &self.rows(),
             &self.state,
-            self.file_search.empty_message(),
+            &empty_message,
             self.search_mode,
         );
     }
@@ -144,11 +145,11 @@ impl FileSearch {
         !self.matches.is_empty()
     }
 
-    fn empty_message(&self) -> &'static str {
+    fn empty_message(&self) -> String {
         if self.waiting {
-            "loading..."
+            super::i18n::text("mention-loading", "loading...")
         } else {
-            "no matches"
+            super::i18n::text("mention-no-matches", "no matches")
         }
     }
 }

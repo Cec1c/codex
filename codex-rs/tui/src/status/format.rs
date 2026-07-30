@@ -35,11 +35,7 @@ impl FieldFormatter {
         }
     }
 
-    pub(crate) fn line(
-        &self,
-        label: &'static str,
-        value_spans: Vec<Span<'static>>,
-    ) -> Line<'static> {
+    pub(crate) fn line(&self, label: &str, value_spans: Vec<Span<'static>>) -> Line<'static> {
         Line::from(self.full_spans(label, value_spans))
     }
 

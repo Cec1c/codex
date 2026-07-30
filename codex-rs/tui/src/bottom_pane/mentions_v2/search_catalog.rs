@@ -151,9 +151,15 @@ fn plugin_description(plugin: &PluginCapabilitySummary) -> Option<String> {
     let capability_labels = plugin_capability_labels(plugin);
     plugin.description.clone().or_else(|| {
         Some(if capability_labels.is_empty() {
-            "Plugin".to_string()
+            super::i18n::text("mention-plugin-fallback", "Plugin")
         } else {
-            format!("Plugin - {}", capability_labels.join(" - "))
+            let capabilities = capability_labels.join(" · ");
+            super::i18n::text_with_arg(
+                "mention-plugin-capabilities",
+                "capabilities",
+                capabilities.clone(),
+                || format!("Plugin - {capabilities}"),
+            )
         })
     })
 }
@@ -161,22 +167,32 @@ fn plugin_description(plugin: &PluginCapabilitySummary) -> Option<String> {
 fn plugin_capability_labels(plugin: &PluginCapabilitySummary) -> Vec<String> {
     let mut labels = Vec::new();
     if plugin.has_skills {
-        labels.push("skills".to_string());
+        labels.push(super::i18n::text("mention-capability-skills", "skills"));
     }
     if !plugin.mcp_server_names.is_empty() {
         let mcp_server_count = plugin.mcp_server_names.len();
         labels.push(if mcp_server_count == 1 {
-            "1 MCP server".to_string()
+            super::i18n::text("mention-capability-mcp-one", "1 MCP server")
         } else {
-            format!("{mcp_server_count} MCP servers")
+            super::i18n::text_with_arg(
+                "mention-capability-mcp-many",
+                "count",
+                mcp_server_count.to_string(),
+                || format!("{mcp_server_count} MCP servers"),
+            )
         });
     }
     if !plugin.app_connector_ids.is_empty() {
         let app_count = plugin.app_connector_ids.len();
         labels.push(if app_count == 1 {
-            "1 app".to_string()
+            super::i18n::text("mention-capability-app-one", "1 app")
         } else {
-            format!("{app_count} apps")
+            super::i18n::text_with_arg(
+                "mention-capability-app-many",
+                "count",
+                app_count.to_string(),
+                || format!("{app_count} apps"),
+            )
         });
     }
     labels

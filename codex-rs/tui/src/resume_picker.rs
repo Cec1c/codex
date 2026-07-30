@@ -79,6 +79,26 @@ const FOOTER_HINT_GAP: usize = 3;
 const PICKER_CHROME_HEIGHT: u16 = 8;
 const PICKER_LIST_HORIZONTAL_INSET: u16 = 4;
 
+fn resume_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+fn resume_text_with_args<F>(key: &str, values: &[(&str, String)], english: F) -> String
+where
+    F: FnOnce() -> String,
+{
+    let mut args = fluent_bundle::FluentArgs::new();
+    for (name, value) in values {
+        args.set(*name, value.clone());
+    }
+    crate::i18n::global().text(key, Some(&args), english)
+}
+
+fn pad_to_display_width(value: &str, width: usize) -> String {
+    let padding = width.saturating_sub(value.width());
+    format!("{value}{}", " ".repeat(padding))
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionTarget {
     pub path: Option<PathBuf>,
@@ -90,7 +110,14 @@ impl SessionTarget {
         self.path
             .as_ref()
             .map(|path| path.display().to_string())
-            .unwrap_or_else(|| format!("thread {}", self.thread_id))
+            .unwrap_or_else(|| {
+                let thread_id = self.thread_id.to_string();
+                resume_text_with_args(
+                    "resume-thread-label",
+                    &[("thread_id", thread_id.clone())],
+                    || format!("thread {thread_id}"),
+                )
+            })
     }
 }
 
@@ -115,17 +142,21 @@ pub enum SessionPickerLaunchContext {
 }
 
 impl SessionPickerAction {
-    fn title(self) -> &'static str {
+    fn title(self) -> String {
         match self {
-            SessionPickerAction::Resume => "Resume a previous session",
-            SessionPickerAction::Fork => "Fork a previous session",
+            SessionPickerAction::Resume => {
+                resume_text("resume-picker-title-resume", "Resume a previous session")
+            }
+            SessionPickerAction::Fork => {
+                resume_text("resume-picker-title-fork", "Fork a previous session")
+            }
         }
     }
 
-    fn action_label(self) -> &'static str {
+    fn action_label(self) -> String {
         match self {
-            SessionPickerAction::Resume => "resume",
-            SessionPickerAction::Fork => "fork",
+            SessionPickerAction::Resume => resume_text("resume-action-resume", "resume"),
+            SessionPickerAction::Fork => resume_text("resume-action-fork", "fork"),
         }
     }
 
@@ -612,10 +643,12 @@ fn spawn_app_server_page_loader(
 }
 
 /// Returns the human-readable column header for the given sort key.
-fn sort_key_label(sort_key: ThreadSortKey) -> &'static str {
+fn sort_key_label(sort_key: ThreadSortKey) -> String {
     match sort_key {
-        ThreadSortKey::CreatedAt => "Created",
-        ThreadSortKey::UpdatedAt | ThreadSortKey::RecencyAt => "Updated",
+        ThreadSortKey::CreatedAt => resume_text("resume-sort-created", "Created"),
+        ThreadSortKey::UpdatedAt | ThreadSortKey::RecencyAt => {
+            resume_text("resume-sort-updated", "Updated")
+        }
     }
 }
 
@@ -1034,7 +1067,10 @@ impl PickerState {
             return;
         };
         let Some(thread_id) = row.thread_id else {
-            self.inline_error = Some("No transcript available for this session".to_string());
+            self.inline_error = Some(resume_text(
+                "resume-transcript-unavailable",
+                "No transcript available for this session",
+            ));
             self.request_frame();
             return;
         };
@@ -1151,12 +1187,15 @@ impl PickerState {
                         return Ok(Some(self.action.selection(path, thread_id)));
                     }
                     self.inline_error = Some(match path {
-                        Some(path) => {
-                            format!("Failed to read session metadata from {}", path.display())
-                        }
-                        None => {
-                            String::from("Failed to read session metadata from selected session")
-                        }
+                        Some(path) => resume_text_with_args(
+                            "resume-metadata-read-failed-path",
+                            &[("path", path.display().to_string())],
+                            || format!("Failed to read session metadata from {}", path.display()),
+                        ),
+                        None => resume_text(
+                            "resume-metadata-read-failed-selected",
+                            "Failed to read session metadata from selected session",
+                        ),
                     });
                     self.request_frame();
                 }
@@ -1359,7 +1398,10 @@ impl PickerState {
                     if self.pending_transcript_open == Some(thread_id) {
                         self.pending_transcript_open = None;
                         self.transcript_loading_frame_shown = false;
-                        self.inline_error = Some("Could not load transcript preview".to_string());
+                        self.inline_error = Some(resume_text(
+                            "resume-transcript-preview-failed",
+                            "Could not load transcript preview",
+                        ));
                     }
                     self.request_frame();
                 }
@@ -1685,7 +1727,12 @@ impl PickerState {
         self.ensure_selected_visible();
         if let Err(err) = self.persist_density().await {
             warn!(error = %err, "failed to persist session picker view mode");
-            self.inline_error = Some(format!("Failed to save view mode: {err}"));
+            let error = err.to_string();
+            self.inline_error = Some(resume_text_with_args(
+                "resume-view-mode-save-failed",
+                &[("error", error.clone())],
+                || format!("Failed to save view mode: {error}"),
+            ));
         }
         self.request_frame();
     }
@@ -1818,7 +1865,7 @@ fn row_from_app_server_thread(thread: Thread) -> Option<Row> {
     Some(Row {
         path: thread.path,
         preview: if preview.is_empty() {
-            String::from("(no message yet)")
+            resume_text("resume-no-message-yet", "(no message yet)")
         } else {
             preview.to_string()
         },
@@ -1931,9 +1978,14 @@ fn search_line(state: &PickerState, width: u16) -> Line<'_> {
         return Line::from(error.red());
     }
     let search = if state.query.is_empty() {
-        "Type to search".dim()
+        resume_text("resume-search-placeholder", "Type to search").dim()
     } else {
-        format!("Search: {}", state.query).into()
+        resume_text_with_args(
+            "resume-search-query",
+            &[("query", state.query.clone())],
+            || format!("Search: {}", state.query),
+        )
+        .into()
     };
     let mut toolbar = toolbar_line(state, /*compact*/ false);
     if toolbar.width() as u16 > width.saturating_sub(2) {
@@ -1975,7 +2027,7 @@ fn sort_control_spans(state: &PickerState, compact: bool) -> Vec<Span<'static>> 
     let sort_focused = state.toolbar_focus == ToolbarControl::Sort;
     if compact {
         return vec![
-            "Sort:".dim(),
+            resume_text("resume-sort-label", "Sort:").dim(),
             toolbar_value(
                 sort_key_label(state.sort_key),
                 /*active*/ true,
@@ -1984,7 +2036,8 @@ fn sort_control_spans(state: &PickerState, compact: bool) -> Vec<Span<'static>> 
         ];
     }
     vec![
-        "Sort: ".dim(),
+        resume_text("resume-sort-label", "Sort:").dim(),
+        " ".into(),
         toolbar_value(
             sort_key_label(ThreadSortKey::UpdatedAt),
             state.sort_key == ThreadSortKey::UpdatedAt,
@@ -2002,7 +2055,7 @@ fn filter_control_spans(state: &PickerState, compact: bool) -> Vec<Span<'static>
     let filter_focused = state.toolbar_focus == ToolbarControl::Filter;
     if compact || state.filter_cwd.is_none() {
         return vec![
-            "Filter:".dim(),
+            resume_text("resume-filter-label", "Filter:").dim(),
             toolbar_value(
                 filter_mode_label(state.filter_mode),
                 /*active*/ true,
@@ -2011,7 +2064,8 @@ fn filter_control_spans(state: &PickerState, compact: bool) -> Vec<Span<'static>
         ];
     }
     vec![
-        "Filter: ".dim(),
+        resume_text("resume-filter-label", "Filter:").dim(),
+        " ".into(),
         toolbar_value(
             filter_mode_label(SessionFilterMode::Cwd),
             state.filter_mode == SessionFilterMode::Cwd,
@@ -2025,7 +2079,7 @@ fn filter_control_spans(state: &PickerState, compact: bool) -> Vec<Span<'static>
     ]
 }
 
-fn toolbar_value(label: &'static str, active: bool, focused: bool) -> Span<'static> {
+fn toolbar_value(label: String, active: bool, focused: bool) -> Span<'static> {
     if active {
         let value = format!("[{label}]");
         if focused {
@@ -2038,15 +2092,15 @@ fn toolbar_value(label: &'static str, active: bool, focused: bool) -> Span<'stat
     }
 }
 
-fn filter_mode_label(filter_mode: SessionFilterMode) -> &'static str {
+fn filter_mode_label(filter_mode: SessionFilterMode) -> String {
     match filter_mode {
-        SessionFilterMode::Cwd => "Cwd",
-        SessionFilterMode::All => "All",
+        SessionFilterMode::Cwd => resume_text("resume-filter-cwd", "Cwd"),
+        SessionFilterMode::All => resume_text("resume-filter-all", "All"),
     }
 }
 
 struct PickerFooterHint {
-    key: &'static str,
+    key: String,
     wide_label: String,
     compact_label: String,
     priority: u8,
@@ -2170,15 +2224,15 @@ fn footer_hint_lines(state: &PickerState, width: u16) -> Vec<Line<'static>> {
     if state.is_transcript_loading() {
         let hints = [
             PickerFooterHint {
-                key: "loading",
-                wide_label: String::from("transcript"),
-                compact_label: String::from("transcript"),
+                key: resume_text("resume-footer-loading", "loading"),
+                wide_label: resume_text("resume-footer-transcript", "transcript"),
+                compact_label: resume_text("resume-footer-transcript", "transcript"),
                 priority: 0,
             },
             PickerFooterHint {
-                key: "ctrl+c",
-                wide_label: String::from("quit"),
-                compact_label: String::from("quit"),
+                key: "ctrl+c".to_string(),
+                wide_label: resume_text("resume-footer-quit", "quit"),
+                compact_label: resume_text("resume-footer-quit", "quit"),
                 priority: 1,
             },
         ];
@@ -2192,79 +2246,90 @@ fn footer_hint_lines(state: &PickerState, width: u16) -> Vec<Line<'static>> {
     let action_label = state.action.action_label();
     let (esc_label, esc_compact_label) = if state.query.is_empty() {
         match state.launch_context {
-            SessionPickerLaunchContext::Startup => ("start new", "new"),
-            SessionPickerLaunchContext::ExistingSession => ("exit", "exit"),
+            SessionPickerLaunchContext::Startup => (
+                resume_text("resume-footer-start-new", "start new"),
+                resume_text("resume-footer-new", "new"),
+            ),
+            SessionPickerLaunchContext::ExistingSession => (
+                resume_text("resume-footer-exit", "exit"),
+                resume_text("resume-footer-exit", "exit"),
+            ),
         }
     } else {
-        ("clear search", "clear")
+        (
+            resume_text("resume-footer-clear-search", "clear search"),
+            resume_text("resume-footer-clear", "clear"),
+        )
     };
     let ctrl_c_label = match state.launch_context {
-        SessionPickerLaunchContext::Startup => "quit",
-        SessionPickerLaunchContext::ExistingSession => "exit",
+        SessionPickerLaunchContext::Startup => resume_text("resume-footer-quit", "quit"),
+        SessionPickerLaunchContext::ExistingSession => resume_text("resume-footer-exit", "exit"),
     };
     let density_label = match state.density {
-        SessionListDensity::Comfortable => "dense view",
-        SessionListDensity::Dense => "comfortable view",
+        SessionListDensity::Comfortable => resume_text("resume-footer-dense-view", "dense view"),
+        SessionListDensity::Dense => {
+            resume_text("resume-footer-comfortable-view", "comfortable view")
+        }
     };
     let density_compact_label = match state.density {
-        SessionListDensity::Comfortable => "dense",
-        SessionListDensity::Dense => "comfy",
+        SessionListDensity::Comfortable => resume_text("resume-footer-dense", "dense"),
+        SessionListDensity::Dense => resume_text("resume-footer-comfy", "comfy"),
     };
     let first_row_hints = vec![
         PickerFooterHint {
-            key: "enter",
-            wide_label: action_label.to_string(),
-            compact_label: action_label.to_string(),
+            key: "enter".to_string(),
+            wide_label: action_label.clone(),
+            compact_label: action_label,
             priority: 0,
         },
         PickerFooterHint {
-            key: "esc",
-            wide_label: esc_label.to_string(),
-            compact_label: esc_compact_label.to_string(),
+            key: "esc".to_string(),
+            wide_label: esc_label,
+            compact_label: esc_compact_label,
             priority: 1,
         },
         PickerFooterHint {
-            key: "ctrl+c",
-            wide_label: ctrl_c_label.to_string(),
-            compact_label: ctrl_c_label.to_string(),
+            key: "ctrl+c".to_string(),
+            wide_label: ctrl_c_label.clone(),
+            compact_label: ctrl_c_label,
             priority: 2,
         },
         PickerFooterHint {
-            key: "tab",
-            wide_label: String::from("focus sort/filter"),
-            compact_label: String::from("focus"),
+            key: "tab".to_string(),
+            wide_label: resume_text("resume-footer-focus-sort-filter", "focus sort/filter"),
+            compact_label: resume_text("resume-footer-focus", "focus"),
             priority: 7,
         },
         PickerFooterHint {
-            key: "←/→",
-            wide_label: String::from("change option"),
-            compact_label: String::from("option"),
+            key: "←/→".to_string(),
+            wide_label: resume_text("resume-footer-change-option", "change option"),
+            compact_label: resume_text("resume-footer-option", "option"),
             priority: 8,
         },
     ];
     let second_row_hints = vec![
         PickerFooterHint {
-            key: "ctrl+o",
-            wide_label: density_label.to_string(),
-            compact_label: density_compact_label.to_string(),
+            key: "ctrl+o".to_string(),
+            wide_label: density_label,
+            compact_label: density_compact_label,
             priority: 3,
         },
         PickerFooterHint {
-            key: "ctrl+t",
-            wide_label: String::from("transcript"),
-            compact_label: String::from("preview"),
+            key: "ctrl+t".to_string(),
+            wide_label: resume_text("resume-footer-transcript", "transcript"),
+            compact_label: resume_text("resume-footer-preview", "preview"),
             priority: 4,
         },
         PickerFooterHint {
-            key: "ctrl+e",
-            wide_label: String::from("expand"),
-            compact_label: String::from("exp"),
+            key: "ctrl+e".to_string(),
+            wide_label: resume_text("resume-footer-expand", "expand"),
+            compact_label: resume_text("resume-footer-expand-short", "exp"),
             priority: 6,
         },
         PickerFooterHint {
-            key: "↑/↓",
-            wide_label: String::from("browse"),
-            compact_label: String::from("browse"),
+            key: "↑/↓".to_string(),
+            wide_label: resume_text("resume-footer-browse", "browse"),
+            compact_label: resume_text("resume-footer-browse", "browse"),
             priority: 5,
         },
     ];
@@ -2309,8 +2374,8 @@ fn render_transcript_loading_overlay(frame: &mut crate::custom_terminal::Frame, 
         return;
     }
 
-    let message = "Loading transcript…";
-    let message_width = UnicodeWidthStr::width(message) as u16;
+    let message = resume_text("resume-loading-transcript", "Loading transcript…");
+    let message_width = UnicodeWidthStr::width(message.as_str()) as u16;
     let overlay_width = if area.width >= message_width.saturating_add(10) {
         message_width + 10
     } else {
@@ -2330,7 +2395,7 @@ fn render_transcript_loading_overlay(frame: &mut crate::custom_terminal::Frame, 
         }
     }
 
-    let message = truncate_text(message, overlay.width as usize);
+    let message = truncate_text(&message, overlay.width as usize);
     let message_width = UnicodeWidthStr::width(message.as_str()) as u16;
     let line = Rect::new(
         overlay.x + overlay.width.saturating_sub(message_width) / 2,
@@ -2387,7 +2452,7 @@ fn fit_footer_hint_refs(
         if idx > 0 {
             spans.push(" ".repeat(gap_width).set_style(footer_hint_label_style()));
         }
-        spans.push(hint.key.set_style(footer_hint_key_style()));
+        spans.push(hint.key.clone().set_style(footer_hint_key_style()));
         let label = match mode {
             FooterHintLabelMode::Wide => Some(hint.wide_label.as_str()),
             FooterHintLabelMode::Compact => Some(hint.compact_label.as_str()),
@@ -2436,7 +2501,7 @@ fn footer_hints_width(
                     }
                     FooterHintLabelMode::KeyOnly => 0,
                 };
-                let hint_width = UnicodeWidthStr::width(hint.key) + label_width;
+                let hint_width = UnicodeWidthStr::width(hint.key.as_str()) + label_width;
                 if idx == 0 {
                     hint_width
                 } else {
@@ -2471,7 +2536,7 @@ fn render_list(frame: &mut crate::custom_terminal::Frame, area: Rect, state: &Pi
     );
     if show_more_above {
         frame.render_widget_ref(
-            more_line("↑ more"),
+            more_line(resume_text("resume-more-above", "↑ more")),
             Rect::new(area.x, area.y, area.width, 1),
         );
     }
@@ -2506,15 +2571,21 @@ fn render_list(frame: &mut crate::custom_terminal::Frame, area: Rect, state: &Pi
     if state.pagination.loading.is_pending()
         && y < content_area.y.saturating_add(content_area.height)
     {
-        let loading_line: Line = vec!["  ".into(), "Loading older sessions…".italic().dim()].into();
+        let loading_line: Line = vec![
+            "  ".into(),
+            resume_text("resume-loading-older", "Loading older sessions…")
+                .italic()
+                .dim(),
+        ]
+        .into();
         let rect = Rect::new(area.x, y, area.width, 1);
         frame.render_widget_ref(loading_line, rect);
     }
     if show_more_below {
         let label = if state.pagination.loading.is_pending() {
-            "↓ loading more"
+            resume_text("resume-loading-more", "↓ loading more")
         } else {
-            "↓ more"
+            resume_text("resume-more-below", "↓ more")
         };
         frame.render_widget_ref(
             more_line(label),
@@ -2528,7 +2599,7 @@ fn render_list(frame: &mut crate::custom_terminal::Frame, area: Rect, state: &Pi
     }
 }
 
-fn more_line(label: &'static str) -> Line<'static> {
+fn more_line(label: String) -> Line<'static> {
     vec![label.dim()].into()
 }
 
@@ -2790,12 +2861,12 @@ enum FooterPart {
 }
 
 impl FooterPart {
-    fn text(&self) -> &str {
+    fn text(&self) -> String {
         match self {
-            FooterPart::Date(text) => text,
-            FooterPart::Branch(Some(text)) | FooterPart::Cwd(Some(text)) => text,
-            FooterPart::Branch(None) => "no branch",
-            FooterPart::Cwd(None) => "no cwd",
+            FooterPart::Date(text) => text.clone(),
+            FooterPart::Branch(Some(text)) | FooterPart::Cwd(Some(text)) => text.clone(),
+            FooterPart::Branch(None) => resume_text("resume-no-branch", "no branch"),
+            FooterPart::Cwd(None) => resume_text("resume-no-cwd", "no cwd"),
         }
     }
 
@@ -2858,8 +2929,9 @@ fn footer_parts_width(parts: &[FooterPart], cwd_width: usize) -> usize {
 
 fn footer_part_width(part: &FooterPart, padded: bool, cwd_width: usize) -> usize {
     let prefix_width = part.prefix().map_or(0, UnicodeWidthStr::width);
-    let prefix_gap_width = usize::from(part.prefix().is_some() && !part.text().is_empty());
-    let text_width = UnicodeWidthStr::width(part.text());
+    let text = part.text();
+    let prefix_gap_width = usize::from(part.prefix().is_some() && !text.is_empty());
+    let text_width = UnicodeWidthStr::width(text.as_str());
     let actual_width = prefix_width + prefix_gap_width + text_width;
     match part {
         FooterPart::Date(_) if padded => SESSION_META_DATE_WIDTH.max(actual_width),
@@ -2905,7 +2977,7 @@ fn push_footer_part(
     target_width: Option<usize>,
     available_width: usize,
 ) -> usize {
-    let text = part.text().to_string();
+    let text = part.text();
     let Some(prefix) = part.prefix() else {
         let text = truncate_text(&text, available_width);
         let width = UnicodeWidthStr::width(text.as_str());
@@ -2950,13 +3022,27 @@ fn render_transcript_preview_lines(
         return details;
     };
     let preview_lines = match state.transcript_previews.get(&thread_id) {
-        Some(TranscriptPreviewState::Loading) => {
-            vec![vec!["  │ ".dim(), "Loading recent transcript...".italic().dim()].into()]
-        }
+        Some(TranscriptPreviewState::Loading) => vec![
+            vec![
+                "  │ ".dim(),
+                resume_text(
+                    "resume-loading-recent-transcript",
+                    "Loading recent transcript...",
+                )
+                .italic()
+                .dim(),
+            ]
+            .into(),
+        ],
         Some(TranscriptPreviewState::Failed) => vec![
             vec![
                 "  │ ".dim(),
-                "Could not load transcript preview".italic().red(),
+                resume_text(
+                    "resume-transcript-preview-failed",
+                    "Could not load transcript preview",
+                )
+                .italic()
+                .red(),
             ]
             .into(),
         ],
@@ -2990,21 +3076,47 @@ fn render_expanded_session_details(
         .git_branch
         .as_ref()
         .map(|branch| format!("{SESSION_META_BRANCH_ICON} {branch}"))
-        .unwrap_or_else(|| format!("{SESSION_META_BRANCH_ICON} no branch"));
+        .unwrap_or_else(|| {
+            format!(
+                "{SESSION_META_BRANCH_ICON} {}",
+                resume_text("resume-no-branch", "no branch")
+            )
+        });
 
     vec![
-        expanded_detail_line("Session:", &session, width),
-        expanded_time_detail_line("Created:", reference, row.created_at, width),
+        expanded_detail_line(
+            &resume_text("resume-detail-session", "Session:"),
+            &session,
+            width,
+        ),
         expanded_time_detail_line(
-            "Updated:",
+            &resume_text("resume-detail-created", "Created:"),
+            reference,
+            row.created_at,
+            width,
+        ),
+        expanded_time_detail_line(
+            &resume_text("resume-detail-updated", "Updated:"),
             reference,
             row.updated_at.or(row.created_at),
             width,
         ),
-        expanded_detail_line("Directory:", &directory, width),
-        expanded_detail_line("Branch:", &branch, width),
+        expanded_detail_line(
+            &resume_text("resume-detail-directory", "Directory:"),
+            &directory,
+            width,
+        ),
+        expanded_detail_line(
+            &resume_text("resume-detail-branch", "Branch:"),
+            &branch,
+            width,
+        ),
         vec!["  │".dim()].into(),
-        vec!["  │ ".dim(), "Conversation:".dim()].into(),
+        vec![
+            "  │ ".dim(),
+            resume_text("resume-detail-conversation", "Conversation:").dim(),
+        ]
+        .into(),
     ]
 }
 
@@ -3016,7 +3128,12 @@ fn render_conversation_preview_lines(
         return vec![
             vec![
                 "  └ ".dim(),
-                "No transcript preview available".italic().dim(),
+                resume_text(
+                    "resume-no-transcript-preview",
+                    "No transcript preview available",
+                )
+                .italic()
+                .dim(),
             ]
             .into(),
         ];
@@ -3110,7 +3227,7 @@ fn conversation_user_style() -> Style {
     }
 }
 
-fn expanded_detail_line(label: &'static str, value: &str, width: u16) -> Line<'static> {
+fn expanded_detail_line(label: &str, value: &str, width: u16) -> Line<'static> {
     const LABEL_WIDTH: usize = 10;
     let prefix_width = 4;
     let gap_width = 2;
@@ -3119,7 +3236,7 @@ fn expanded_detail_line(label: &'static str, value: &str, width: u16) -> Line<'s
         .max(1);
     vec![
         "  │ ".dim(),
-        format!("{label:<LABEL_WIDTH$}").dim(),
+        pad_to_display_width(label, LABEL_WIDTH).dim(),
         "  ".dim(),
         truncate_text(value, value_width).into(),
     ]
@@ -3127,7 +3244,7 @@ fn expanded_detail_line(label: &'static str, value: &str, width: u16) -> Line<'s
 }
 
 fn expanded_time_detail_line(
-    label: &'static str,
+    label: &str,
     reference: DateTime<Utc>,
     ts: Option<DateTime<Utc>>,
     width: u16,
@@ -3149,40 +3266,73 @@ fn format_relative_time(reference: DateTime<Utc>, ts: Option<DateTime<Utc>>) -> 
     };
     let seconds = (reference - ts).num_seconds().max(0);
     if seconds == 0 {
-        return "now".to_string();
+        return resume_text("resume-time-now", "now");
     }
     if seconds < 60 {
-        return format!("{seconds}s ago");
+        return resume_text_with_args(
+            "resume-time-seconds-compact",
+            &[("value", seconds.to_string())],
+            || format!("{seconds}s ago"),
+        );
     }
     let minutes = seconds / 60;
     if minutes < 60 {
-        return format!("{minutes}m ago");
+        return resume_text_with_args(
+            "resume-time-minutes-compact",
+            &[("value", minutes.to_string())],
+            || format!("{minutes}m ago"),
+        );
     }
     let hours = minutes / 60;
     if hours < 24 {
-        return format!("{hours}h ago");
+        return resume_text_with_args(
+            "resume-time-hours-compact",
+            &[("value", hours.to_string())],
+            || format!("{hours}h ago"),
+        );
     }
     let days = hours / 24;
-    format!("{days}d ago")
+    resume_text_with_args(
+        "resume-time-days-compact",
+        &[("value", days.to_string())],
+        || format!("{days}d ago"),
+    )
 }
 
 fn format_relative_time_long(reference: DateTime<Utc>, ts: DateTime<Utc>) -> String {
     let seconds = (reference - ts).num_seconds().max(0);
     if seconds == 0 {
-        return "now".to_string();
+        return resume_text("resume-time-now", "now");
     }
     if seconds < 60 {
-        return plural_time(seconds, "second");
+        return resume_text_with_args(
+            "resume-time-seconds-long",
+            &[("value", seconds.to_string())],
+            || plural_time(seconds, "second"),
+        );
     }
     let minutes = seconds / 60;
     if minutes < 60 {
-        return plural_time(minutes, "minute");
+        return resume_text_with_args(
+            "resume-time-minutes-long",
+            &[("value", minutes.to_string())],
+            || plural_time(minutes, "minute"),
+        );
     }
     let hours = minutes / 60;
     if hours < 24 {
-        return plural_time(hours, "hour");
+        return resume_text_with_args(
+            "resume-time-hours-long",
+            &[("value", hours.to_string())],
+            || plural_time(hours, "hour"),
+        );
     }
-    plural_time(hours / 24, "day")
+    let days = hours / 24;
+    resume_text_with_args(
+        "resume-time-days-long",
+        &[("value", days.to_string())],
+        || plural_time(days, "day"),
+    )
 }
 
 fn plural_time(value: i64, unit: &str) -> String {
@@ -3202,26 +3352,48 @@ fn render_empty_state_line(state: &PickerState) -> Line<'static> {
         if state.search_state.is_active()
             || (state.pagination.loading.is_pending() && state.pagination.next_cursor.is_some())
         {
-            return vec!["Searching…".italic().dim()].into();
+            return vec![resume_text("resume-searching", "Searching…").italic().dim()].into();
         }
         if state.pagination.reached_scan_cap {
-            let msg = format!(
-                "Search scanned first {} sessions; more may exist",
-                state.pagination.num_scanned_files
+            let count = state.pagination.num_scanned_files.to_string();
+            let msg = resume_text_with_args(
+                "resume-search-scan-cap",
+                &[("count", count.clone())],
+                || format!("Search scanned first {count} sessions; more may exist"),
             );
             return vec![Span::from(msg).italic().dim()].into();
         }
-        return vec!["No results for your search".italic().dim()].into();
+        return vec![
+            resume_text("resume-search-no-results", "No results for your search")
+                .italic()
+                .dim(),
+        ]
+        .into();
     }
 
     if state.pagination.loading.is_pending() {
         if state.all_rows.is_empty() && state.pagination.num_scanned_files == 0 {
-            return vec!["Loading sessions…".italic().dim()].into();
+            return vec![
+                resume_text("resume-loading-sessions", "Loading sessions…")
+                    .italic()
+                    .dim(),
+            ]
+            .into();
         }
-        return vec!["Loading older sessions…".italic().dim()].into();
+        return vec![
+            resume_text("resume-loading-older", "Loading older sessions…")
+                .italic()
+                .dim(),
+        ]
+        .into();
     }
 
-    vec!["No sessions yet".italic().dim()].into()
+    vec![
+        resume_text("resume-no-sessions", "No sessions yet")
+            .italic()
+            .dim(),
+    ]
+    .into()
 }
 
 #[cfg(test)]

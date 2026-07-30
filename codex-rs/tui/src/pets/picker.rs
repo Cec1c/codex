@@ -25,6 +25,10 @@ use super::model::Pet;
 use super::model::custom_pet_selector;
 use super::preview::PetPickerPreviewState;
 
+fn pet_picker_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 pub(crate) const PET_PICKER_VIEW_ID: &str = "pet-picker";
 const PET_PICKER_PREVIEW_WIDTH: u16 = 30;
 
@@ -118,12 +122,18 @@ pub(crate) fn build_pet_picker_params(
 
     SelectionViewParams {
         view_id: Some(PET_PICKER_VIEW_ID),
-        title: Some("Select Pet".to_string()),
-        subtitle: Some("Choose a pet to wake in the terminal.".to_string()),
+        title: Some(pet_picker_text("pet-picker-title", "Select Pet")),
+        subtitle: Some(pet_picker_text(
+            "pet-picker-subtitle",
+            "Choose a pet to wake in the terminal.",
+        )),
         footer_hint: Some(standard_popup_hint_line()),
         items,
         is_searchable: true,
-        search_placeholder: Some("Type to filter pets...".to_string()),
+        search_placeholder: Some(pet_picker_text(
+            "pet-picker-search-placeholder",
+            "Type to filter pets...",
+        )),
         initial_selected_idx,
         side_content: Box::new(preview_state.renderable()),
         side_content_width: SideContentWidth::Fixed(PET_PICKER_PREVIEW_WIDTH),
@@ -148,7 +158,7 @@ fn available_pet_entries(codex_home: &Path) -> Vec<PetPickerEntry> {
     entries.push(PetPickerEntry {
         selector: DISABLED_PET_ID.to_string(),
         legacy_selector: None,
-        display_name: "Disable terminal pets".to_string(),
+        display_name: pet_picker_text("pet-picker-disable", "Disable terminal pets"),
         description: None,
     });
     entries.extend(custom_pet_entries(codex_home));

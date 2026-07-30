@@ -23,7 +23,7 @@ impl HistoryCell for UpdateAvailableHistoryCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         use ratatui_macros::line;
         use ratatui_macros::text;
-        let update_instruction = if let Some(update_action) = self.update_action {
+        let update_instruction = if let Some(update_action) = &self.update_action {
             line!["Run ", update_action.command_str().cyan(), " to update."]
         } else {
             line![
@@ -33,19 +33,37 @@ impl HistoryCell for UpdateAvailableHistoryCell {
             ]
         };
 
+        let (title, current_version, release_url) = self
+            .update_action
+            .as_ref()
+            .and_then(UpdateAction::ccu_prompt_details)
+            .map_or_else(
+                || {
+                    (
+                        "Update available!".to_string(),
+                        CODEX_CLI_VERSION.to_string(),
+                        "https://github.com/openai/codex/releases/latest".to_string(),
+                    )
+                },
+                |(current_version, release_url)| {
+                    (
+                        "CCU update available!".to_string(),
+                        current_version.to_string(),
+                        release_url.to_string(),
+                    )
+                },
+            );
         let content = text![
             line![
                 "✨\u{200A}".bold().cyan(),
-                "Update available!".bold().cyan(),
+                title.bold().cyan(),
                 " ",
-                format!("{CODEX_CLI_VERSION} -> {}", self.latest_version).bold(),
+                format!("{current_version} -> {}", self.latest_version).bold(),
             ],
             update_instruction,
             "",
             "See full release notes:",
-            "https://github.com/openai/codex/releases/latest"
-                .cyan()
-                .underlined(),
+            release_url.cyan().underlined(),
         ];
 
         let inner_width = content
@@ -57,18 +75,38 @@ impl HistoryCell for UpdateAvailableHistoryCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        let update_instruction = if let Some(update_action) = self.update_action {
+        let update_instruction = if let Some(update_action) = &self.update_action {
             format!("Run {} to update.", update_action.command_str())
         } else {
             "See https://github.com/openai/codex for installation options.".to_string()
         };
+        let (title, current_version, release_url) = self
+            .update_action
+            .as_ref()
+            .and_then(UpdateAction::ccu_prompt_details)
+            .map_or_else(
+                || {
+                    (
+                        "Update available!".to_string(),
+                        CODEX_CLI_VERSION.to_string(),
+                        "https://github.com/openai/codex/releases/latest".to_string(),
+                    )
+                },
+                |(current_version, release_url)| {
+                    (
+                        "CCU update available!".to_string(),
+                        current_version.to_string(),
+                        release_url.to_string(),
+                    )
+                },
+            );
         vec![
-            Line::from("Update available!"),
-            Line::from(format!("{CODEX_CLI_VERSION} -> {}", self.latest_version)),
+            Line::from(title),
+            Line::from(format!("{current_version} -> {}", self.latest_version)),
             Line::from(update_instruction),
             Line::from(""),
             Line::from("See full release notes:"),
-            Line::from("https://github.com/openai/codex/releases/latest"),
+            Line::from(release_url),
         ]
     }
 

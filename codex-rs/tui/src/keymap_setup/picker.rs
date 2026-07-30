@@ -20,10 +20,26 @@ use crate::style::accent_style;
 
 use super::actions::KEYMAP_ACTIONS;
 use super::actions::KeymapActionFilter;
+use super::actions::action_description;
 use super::actions::action_label;
 use super::actions::bindings_for_action;
+use super::actions::context_label;
 use super::actions::format_binding_summary;
 use super::has_custom_binding;
+
+fn keymap_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
+fn keymap_count_text(key: &str, count: usize, english: impl FnOnce() -> String) -> String {
+    crate::i18n::global().text_with_string_arg(key, "count", count.to_string(), english)
+}
+
+fn keymap_tab_text(tab_id: &str, field: &str, english: &'static str) -> String {
+    crate::i18n::global().text(&format!("keymap-tab-{tab_id}-{field}"), None, || {
+        english.to_string()
+    })
+}
 
 pub(crate) const KEYMAP_PICKER_VIEW_ID: &str = "keymap-picker";
 pub(super) const KEYMAP_ALL_TAB_ID: &str = "all-shortcuts";
@@ -37,10 +53,10 @@ const KEYMAP_ROW_PREFIX_WIDTH: usize = KEYMAP_CONTEXT_LABEL_WIDTH + 3;
 #[derive(Clone, Debug)]
 struct KeymapActionRow {
     context: &'static str,
-    context_label: &'static str,
+    context_label: String,
     action: &'static str,
     label: String,
-    description: &'static str,
+    description: String,
     binding_summary: String,
     custom_binding: bool,
 }
@@ -199,15 +215,26 @@ fn build_keymap_picker_params_for_action(
     let mut tabs = Vec::new();
     tabs.push(SelectionTab {
         id: KEYMAP_ALL_TAB_ID.to_string(),
-        label: "All".to_string(),
+        label: keymap_text("keymap-tab-all-label", "All"),
         header: keymap_header(
-            "All configurable shortcuts.".to_string(),
-            format!("{total} actions, {custom_count} customized, {unbound_count} unbound."),
+            keymap_text("keymap-tab-all-description", "All configurable shortcuts."),
+            {
+                let mut args = fluent_bundle::FluentArgs::new();
+                args.set("total", total.to_string());
+                args.set("custom", custom_count.to_string());
+                args.set("unbound", unbound_count.to_string());
+                crate::i18n::global().text("keymap-summary", Some(&args), || {
+                    format!("{total} actions, {custom_count} customized, {unbound_count} unbound.")
+                })
+            },
         ),
         items: keymap_selection_items(
             rows.iter(),
-            "No shortcuts available",
-            "No configurable shortcuts are available.",
+            keymap_text("keymap-empty-all", "No shortcuts available"),
+            keymap_text(
+                "keymap-empty-all-description",
+                "No configurable shortcuts are available.",
+            ),
         ),
     });
 
@@ -215,15 +242,21 @@ fn build_keymap_picker_params_for_action(
     let common_count = common_rows.len();
     tabs.push(SelectionTab {
         id: KEYMAP_COMMON_TAB_ID.to_string(),
-        label: "Common".to_string(),
+        label: keymap_text("keymap-tab-common-label", "Common"),
         header: keymap_header(
-            "Frequently customized shortcuts.".to_string(),
+            keymap_text(
+                "keymap-tab-common-description",
+                "Frequently customized shortcuts.",
+            ),
             action_count_line(common_count),
         ),
         items: keymap_selection_items(
             common_rows,
-            "No common shortcuts",
-            "No common shortcut actions are available.",
+            keymap_text("keymap-empty-common", "No common shortcuts"),
+            keymap_text(
+                "keymap-empty-common-description",
+                "No common shortcut actions are available.",
+            ),
         ),
     });
 
@@ -233,15 +266,23 @@ fn build_keymap_picker_params_for_action(
         .collect::<Vec<_>>();
     tabs.push(SelectionTab {
         id: KEYMAP_CUSTOM_TAB_ID.to_string(),
-        label: format!("Customized ({custom_count})"),
+        label: keymap_count_text("keymap-tab-customized-label", custom_count, || {
+            format!("Customized ({custom_count})")
+        }),
         header: keymap_header(
-            "Root-level shortcut overrides.".to_string(),
+            keymap_text(
+                "keymap-tab-customized-description",
+                "Root-level shortcut overrides.",
+            ),
             action_count_line(custom_count),
         ),
         items: keymap_selection_items(
             custom_rows,
-            "No customized shortcuts",
-            "No root-level keymap overrides have been configured.",
+            keymap_text("keymap-empty-customized", "No customized shortcuts"),
+            keymap_text(
+                "keymap-empty-customized-description",
+                "No root-level keymap overrides have been configured.",
+            ),
         ),
     });
 
@@ -251,15 +292,23 @@ fn build_keymap_picker_params_for_action(
         .collect::<Vec<_>>();
     tabs.push(SelectionTab {
         id: KEYMAP_UNBOUND_TAB_ID.to_string(),
-        label: format!("Unbound ({unbound_count})"),
+        label: keymap_count_text("keymap-tab-unbound-label", unbound_count, || {
+            format!("Unbound ({unbound_count})")
+        }),
         header: keymap_header(
-            "Actions without an active shortcut.".to_string(),
+            keymap_text(
+                "keymap-tab-unbound-description",
+                "Actions without an active shortcut.",
+            ),
             action_count_line(unbound_count),
         ),
         items: keymap_selection_items(
             unbound_rows,
-            "No unbound shortcuts",
-            "Every configurable action currently has a shortcut.",
+            keymap_text("keymap-empty-unbound", "No unbound shortcuts"),
+            keymap_text(
+                "keymap-empty-unbound-description",
+                "Every configurable action currently has a shortcut.",
+            ),
         ),
     });
 
@@ -271,12 +320,18 @@ fn build_keymap_picker_params_for_action(
         let count = tab_rows.len();
         tabs.push(SelectionTab {
             id: tab.id.to_string(),
-            label: tab.label.to_string(),
-            header: keymap_header(tab.description.to_string(), action_count_line(count)),
+            label: keymap_tab_text(tab.id, "label", tab.label),
+            header: keymap_header(
+                keymap_tab_text(tab.id, "description", tab.description),
+                action_count_line(count),
+            ),
             items: keymap_selection_items(
                 tab_rows,
-                "No shortcuts in this group",
-                "No configurable actions are available in this group.",
+                keymap_text("keymap-empty-group", "No shortcuts in this group"),
+                keymap_text(
+                    "keymap-empty-group-description",
+                    "No configurable actions are available in this group.",
+                ),
             ),
         });
     }
@@ -290,7 +345,10 @@ fn build_keymap_picker_params_for_action(
         tabs,
         initial_tab_id: Some(KEYMAP_ALL_TAB_ID.to_string()),
         is_searchable: true,
-        search_placeholder: Some("Type to search shortcuts".to_string()),
+        search_placeholder: Some(keymap_text(
+            "keymap-search-placeholder",
+            "Type to search shortcuts",
+        )),
         col_width_mode: ColumnWidthMode::AutoAllRows,
         row_display: SelectionRowDisplay::SingleLine,
         name_column_width,
@@ -302,21 +360,27 @@ fn build_keymap_picker_params_for_action(
 fn keymap_debug_tab() -> SelectionTab {
     SelectionTab {
         id: KEYMAP_DEBUG_TAB_ID.to_string(),
-        label: "Debug".to_string(),
+        label: keymap_text("keymap-tab-debug-label", "Debug"),
         header: keymap_header(
-            "Inspect keypresses from your terminal.".to_string(),
-            "See the key Codex detects and any shortcuts assigned to it.".to_string(),
+            keymap_text(
+                "keymap-tab-debug-description",
+                "Inspect keypresses from your terminal.",
+            ),
+            keymap_text(
+                "keymap-tab-debug-summary",
+                "See the key Codex detects and any shortcuts assigned to it.",
+            ),
         ),
         items: vec![SelectionItem {
-            name: "Inspect keypresses".to_string(),
-            description: Some(
-                "Press Enter to start. Then press any key to inspect it; Ctrl+C exits."
-                    .to_string(),
-            ),
-            selected_description: Some(
-                "Open a live inspector that shows the detected key, config key, and matching actions."
-                    .to_string(),
-            ),
+            name: keymap_text("keymap-inspect-keypresses", "Inspect keypresses"),
+            description: Some(keymap_text(
+                "keymap-inspect-keypresses-description",
+                "Press Enter to start. Then press any key to inspect it; Ctrl+C exits.",
+            )),
+            selected_description: Some(keymap_text(
+                "keymap-inspect-keypresses-selected",
+                "Open a live inspector that shows the detected key, config key, and matching actions.",
+            )),
             actions: vec![Box::new(|tx| {
                 tx.send(AppEvent::OpenKeymapDebug);
             })],
@@ -341,10 +405,14 @@ fn build_keymap_rows(
                     .unwrap_or(&[]);
             KeymapActionRow {
                 context: descriptor.context,
-                context_label: descriptor.context_label,
+                context_label: context_label(descriptor.context, descriptor.context_label),
                 action: descriptor.action,
                 label: action_label(descriptor.action),
-                description: descriptor.description,
+                description: action_description(
+                    descriptor.context,
+                    descriptor.action,
+                    descriptor.description,
+                ),
                 binding_summary: format_binding_summary(bindings),
                 custom_binding: has_custom_binding(
                     keymap_config,
@@ -369,8 +437,8 @@ fn keymap_common_rows(rows: &[KeymapActionRow]) -> Vec<&KeymapActionRow> {
 
 fn keymap_selection_items<'a>(
     rows: impl IntoIterator<Item = &'a KeymapActionRow>,
-    empty_name: &str,
-    empty_description: &str,
+    empty_name: String,
+    empty_description: String,
 ) -> Vec<SelectionItem> {
     let items = rows
         .into_iter()
@@ -378,8 +446,8 @@ fn keymap_selection_items<'a>(
         .collect::<Vec<_>>();
     if items.is_empty() {
         return vec![SelectionItem {
-            name: empty_name.to_string(),
-            description: Some(empty_description.to_string()),
+            name: empty_name,
+            description: Some(empty_description),
             is_disabled: true,
             ..Default::default()
         }];
@@ -404,7 +472,11 @@ fn keymap_selection_item(row: &KeymapActionRow) -> SelectionItem {
     SelectionItem {
         name: row.label.clone(),
         name_prefix_spans: keymap_row_prefix(row),
-        description: Some(row.binding_summary.clone()),
+        description: Some(if row.is_unbound() {
+            keymap_text("keymap-unbound", "unbound")
+        } else {
+            row.binding_summary.clone()
+        }),
         actions: vec![Box::new(move |tx| {
             tx.send(AppEvent::OpenKeymapActionMenu {
                 context: context.clone(),
@@ -439,7 +511,7 @@ fn keymap_row_prefix(row: &KeymapActionRow) -> Vec<Span<'static>> {
 
 fn keymap_header(description: String, summary: String) -> Box<dyn Renderable> {
     let mut header = ColumnRenderable::new();
-    header.push(Line::from("Keymap".bold()));
+    header.push(Line::from(keymap_text("keymap-title", "Keymap").bold()));
     header.push(Line::from(description.dim()));
     header.push(Line::from(summary.dim()));
     Box::new(header)
@@ -447,8 +519,8 @@ fn keymap_header(description: String, summary: String) -> Box<dyn Renderable> {
 
 fn action_count_line(count: usize) -> String {
     match count {
-        1 => "1 action.".to_string(),
-        _ => format!("{count} actions."),
+        1 => keymap_text("keymap-one-action", "1 action."),
+        _ => keymap_count_text("keymap-action-count", count, || format!("{count} actions.")),
     }
 }
 
@@ -456,15 +528,24 @@ fn keymap_picker_hint_line() -> Line<'static> {
     let style = accent_style();
     Line::from(vec![
         "left/right".set_style(style),
-        " group · ".dim(),
+        " ".dim(),
+        keymap_text("keymap-hint-group", "group").dim(),
+        " · ".dim(),
         "enter".set_style(style),
-        " edit shortcut · ".dim(),
+        " ".dim(),
+        keymap_text("keymap-hint-edit", "edit shortcut").dim(),
+        " · ".dim(),
         "*".set_style(style),
-        " custom · ".dim(),
+        " ".dim(),
+        keymap_text("keymap-hint-custom", "custom").dim(),
+        " · ".dim(),
         "-".set_style(style),
-        " unbound · ".dim(),
+        " ".dim(),
+        keymap_text("keymap-hint-unbound", "unbound").dim(),
+        " · ".dim(),
         "esc".set_style(style),
-        " close".dim(),
+        " ".dim(),
+        keymap_text("keymap-hint-close", "close").dim(),
     ])
 }
 
@@ -472,8 +553,11 @@ fn keymap_debug_hint_line() -> Line<'static> {
     let style = accent_style();
     Line::from(vec![
         "enter".set_style(style),
-        " start inspector · ".dim(),
+        " ".dim(),
+        keymap_text("keymap-hint-start-inspector", "start inspector").dim(),
+        " · ".dim(),
         "esc".set_style(style),
-        " close".dim(),
+        " ".dim(),
+        keymap_text("keymap-hint-close", "close").dim(),
     ])
 }

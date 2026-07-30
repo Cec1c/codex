@@ -203,7 +203,7 @@ pub(super) const KEYMAP_ACTIONS: &[KeymapActionDescriptor] = &[
 /// parsed back into an action name, because underscores and casing are part of
 /// the stable config contract.
 pub(super) fn action_label(action: &str) -> String {
-    action
+    let english = action
         .split('_')
         .map(|word| {
             let mut chars = word.chars();
@@ -213,7 +213,28 @@ pub(super) fn action_label(action: &str) -> String {
             format!("{}{}", first.to_ascii_uppercase(), chars.as_str())
         })
         .collect::<Vec<_>>()
-        .join(" ")
+        .join(" ");
+    let action_key = action.replace('_', "-");
+    crate::i18n::global().text(&format!("keymap-action-{action_key}-label"), None, || {
+        english
+    })
+}
+
+pub(super) fn action_description(context: &str, action: &str, english: &'static str) -> String {
+    let context_key = context.replace('_', "-");
+    let action_key = action.replace('_', "-");
+    crate::i18n::global().text(
+        &format!("keymap-action-{context_key}-{action_key}-description"),
+        None,
+        || english.to_string(),
+    )
+}
+
+pub(super) fn context_label(context: &str, english: &'static str) -> String {
+    let context_key = context.replace('_', "-");
+    crate::i18n::global().text(&format!("keymap-context-{context_key}-label"), None, || {
+        english.to_string()
+    })
 }
 
 #[rustfmt::skip]
@@ -494,11 +515,19 @@ pub(super) enum KeymapDebugBindingSource {
 }
 
 impl KeymapDebugBindingSource {
-    pub(super) const fn label(&self) -> &'static str {
+    pub(super) fn label(&self) -> String {
         match self {
-            Self::Custom => "Custom",
-            Self::CustomGlobal => "Custom global",
-            Self::Default => "Default",
+            Self::Custom => {
+                crate::i18n::global().text("keymap-source-custom", None, || "Custom".to_string())
+            }
+            Self::CustomGlobal => {
+                crate::i18n::global().text("keymap-source-custom-global", None, || {
+                    "Custom global".to_string()
+                })
+            }
+            Self::Default => {
+                crate::i18n::global().text("keymap-source-default", None, || "Default".to_string())
+            }
         }
     }
 }
@@ -508,7 +537,7 @@ pub(super) struct KeymapDebugActionMatch {
     pub(super) context: &'static str,
     pub(super) action: &'static str,
     pub(super) label: String,
-    pub(super) description: &'static str,
+    pub(super) description: String,
     pub(super) source: KeymapDebugBindingSource,
 }
 
@@ -529,7 +558,11 @@ pub(super) fn matching_actions_for_key_event(
                     context: descriptor.context,
                     action: descriptor.action,
                     label: action_label(descriptor.action),
-                    description: descriptor.description,
+                    description: action_description(
+                        descriptor.context,
+                        descriptor.action,
+                        descriptor.description,
+                    ),
                     source: debug_binding_source(keymap_config, descriptor),
                 })
         })

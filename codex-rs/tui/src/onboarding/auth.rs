@@ -387,14 +387,23 @@ impl AuthModeWidget {
     }
 
     fn render_pick_mode(&self, area: Rect, buf: &mut Buffer) {
+        let localizer = crate::i18n::global();
         let mut lines: Vec<Line> = vec![
             Line::from(vec![
                 "  ".into(),
-                "Sign in with ChatGPT to use Codex as part of your paid plan".into(),
+                localizer
+                    .text("onboarding-paid-plan-intro", None, || {
+                        "Sign in with ChatGPT to use Codex as part of your paid plan".to_string()
+                    })
+                    .into(),
             ]),
             Line::from(vec![
                 "  ".into(),
-                "or connect an API key for usage-based billing".into(),
+                localizer
+                    .text("onboarding-api-key-billing-intro", None, || {
+                        "or connect an API key for usage-based billing".to_string()
+                    })
+                    .into(),
             ]),
             "".into(),
         ];
@@ -434,6 +443,15 @@ impl AuthModeWidget {
             "Usage included with Plus, Pro, Business, and Enterprise plans"
         };
         let device_code_description = "Sign in from another device with a one-time code";
+        let sign_in_chatgpt = localizer.text("onboarding-sign-in-chatgpt", None, || {
+            "Sign in with ChatGPT".to_string()
+        });
+        let provide_api_key = localizer.text("onboarding-provide-api-key", None, || {
+            "Provide your own API key".to_string()
+        });
+        let pay_for_usage = localizer.text("onboarding-pay-for-usage", None, || {
+            "Pay for what you use".to_string()
+        });
 
         for (idx, option) in self.displayed_sign_in_options().into_iter().enumerate() {
             match option {
@@ -441,7 +459,7 @@ impl AuthModeWidget {
                     lines.extend(create_mode_item(
                         idx,
                         option,
-                        "Sign in with ChatGPT",
+                        &sign_in_chatgpt,
                         chatgpt_description,
                     ));
                 }
@@ -457,8 +475,8 @@ impl AuthModeWidget {
                     lines.extend(create_mode_item(
                         idx,
                         option,
-                        "Provide your own API key",
-                        "Pay for what you use",
+                        &provide_api_key,
+                        &pay_for_usage,
                     ));
                 }
             }
@@ -466,11 +484,11 @@ impl AuthModeWidget {
         }
 
         if !self.is_api_login_allowed() {
-            lines.push(
-                "  API key login is disabled by this workspace. Sign in with ChatGPT to continue."
-                    .dim()
-                    .into(),
-            );
+            let message = localizer.text("onboarding-api-key-disabled-workspace", None, || {
+                "API key login is disabled by this workspace. Sign in with ChatGPT to continue."
+                    .to_string()
+            });
+            lines.push(format!("  {message}").dim().into());
             lines.push("".into());
         }
         lines.push(Line::from(vec![
