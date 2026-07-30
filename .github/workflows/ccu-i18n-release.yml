@@ -356,7 +356,7 @@ jobs:
             binary: codex.exe
           - runtime_id: linux-x64
             os: ubuntu-24.04
-            target: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-gnu
             binary: codex
           - runtime_id: linux-arm64
             os: ubuntu-24.04-arm
