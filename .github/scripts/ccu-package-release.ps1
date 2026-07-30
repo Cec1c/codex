@@ -87,7 +87,7 @@ $platforms = @{
         ManifestName = 'ccu-fork-manifest-linux-x64.json'
     }
     'linux-arm64' = @{
-        Target = 'aarch64-unknown-linux-musl'
+        Target = 'aarch64-unknown-linux-gnu'
         BinaryName = 'codex'
         ManifestName = 'ccu-fork-manifest-linux-arm64.json'
     }
