@@ -45,6 +45,9 @@ jobs:
       - name: Verify workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/ccu-i18n-ci.yml .github/workflows/ccu-i18n-release.yml
 
+      - name: Verify conflict handoff ordering
+        run: python3 .github/scripts/ccu-check-release-workflow.py
+
       - name: Verify CCU TUI contract
         working-directory: codex-rs
         run: |
