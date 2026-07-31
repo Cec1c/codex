@@ -205,17 +205,6 @@ jobs:
                   }'
               )"
 
-              remote_base_commit="$(
-                git ls-remote origin "refs/heads/$agent_base_branch" | awk '{print $1}'
-              )"
-              if [[ -n "$remote_base_commit" && "$remote_base_commit" != "$upstream_commit" ]]; then
-                echo "Agent base branch exists at a different commit; refusing to overwrite it." >&2
-                exit 1
-              fi
-              if [[ -z "$remote_base_commit" ]]; then
-                git push origin "$upstream_commit:refs/heads/$agent_base_branch"
-              fi
-
               gh label create ccu-sync-conflict \
                 --repo "$GITHUB_REPOSITORY" \
                 --color D93F0B \
@@ -259,7 +248,7 @@ jobs:
                 echo "${conflicts:-unknown}"
                 echo '```'
                 echo
-                echo "The release branch was not created or overwritten. The CCU conflict resolver will inspect upstream i18n support and either prepare a reviewed release branch or mark this issue for migration."
+                echo "The release branch was not created or overwritten. Once the trusted agent base branch points at the upstream commit, the CCU conflict resolver will prepare a reviewed release branch or mark this issue for migration."
               } > "$body_file"
               issue_number="$(
                 gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
@@ -279,6 +268,24 @@ jobs:
                 gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
                   --body-file "$body_file" \
                   --add-label ccu-sync-conflict
+              fi
+
+              remote_base_commit="$(
+                git ls-remote origin "refs/heads/$agent_base_branch" | awk '{print $1}'
+              )"
+              if [[ -n "$remote_base_commit" && "$remote_base_commit" != "$upstream_commit" ]]; then
+                gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                  --body "Agent base branch \`$agent_base_branch\` points at \`$remote_base_commit\`, but \`$upstream_commit\` is required. Refusing to overwrite the trusted branch."
+                echo "Agent base branch exists at a different commit; refusing to overwrite it." >&2
+                exit 1
+              fi
+              if [[ -z "$remote_base_commit" ]] && ! git push origin \
+                "$upstream_commit:refs/heads/$agent_base_branch"
+              then
+                gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                  --body "The workflow token could not create \`$agent_base_branch\` at \`$upstream_commit\`. This commonly happens when the upstream commit changes files under \`.github/workflows/\`. Create the branch with trusted maintainer credentials, then re-run the CCU i18n release workflow."
+                echo "Could not create trusted agent base branch; conflict issue #$issue_number records the recovery action." >&2
+                exit 1
               fi
 
               gh workflow run ccu-conflict-resolver.lock.yml \

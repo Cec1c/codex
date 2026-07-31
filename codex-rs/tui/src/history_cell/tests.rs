@@ -1170,6 +1170,22 @@ fn pnpm_update_available_history_cell_snapshot() {
 }
 
 #[test]
+fn ccu_update_available_history_cell_snapshot() {
+    let cell = UpdateAvailableHistoryCell::new(
+        "0.1.5".to_string(),
+        Some(UpdateAction::CcuManager {
+            manager_path: r"C:\ccu\bin\ccu-manager.exe".to_string(),
+            current_version: "0.1.4".to_string(),
+            target_version: "0.1.5".to_string(),
+            release_url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.5".to_string(),
+        }),
+    );
+    let rendered = render_lines(&cell.display_lines(/*width*/ 110)).join("\n");
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
 fn web_search_history_cell_without_detail_snapshot() {
     let cell = new_web_search_call("call-1".to_string(), String::new(), WebSearchAction::Other);
     let rendered = render_lines(&cell.display_lines(/*width*/ 64)).join("\n");
