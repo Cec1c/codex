@@ -362,6 +362,7 @@ mod input_submission;
 mod interrupts;
 use self::interrupts::InterruptManager;
 mod keymap_picker;
+mod language;
 mod mcp_startup;
 use self::mcp_startup::McpStartupStatus;
 mod misalignment_policy;
@@ -388,6 +389,7 @@ use self::plan_implementation::PLAN_IMPLEMENTATION_TITLE;
 mod model_popups;
 mod notifications;
 use self::notifications::Notification;
+mod permission_i18n;
 mod permission_popups;
 mod permissions_menu;
 pub(crate) use self::permissions_menu::auto_review_available;
@@ -491,11 +493,14 @@ use unicode_segmentation::UnicodeSegmentation;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
-const ASK_FOR_APPROVAL_LABEL: &str = "Ask for approval";
-const APPROVE_FOR_ME_LABEL: &str = "Approve for me";
-const AUTO_REVIEW_DESCRIPTION: &str = "Only ask for actions detected as potentially unsafe.";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_STATUS_LINE_ITEMS: [&str; 2] = ["model-with-reasoning", "current-dir"];
+const CCU_STATUS_LINE_ITEMS: [&str; 4] = [
+    "model-with-reasoning",
+    "context-tokens",
+    "context-progress",
+    "session-timing",
+];
 
 /// Common initialization parameters shared by all `ChatWidget` constructors.
 pub(crate) struct ChatWidgetInit {
@@ -727,6 +732,8 @@ pub(crate) struct ChatWidget {
     session_network_proxy: Option<SessionNetworkProxyRuntime>,
     // Shared latch so we only warn once about invalid status-line item IDs.
     status_line_invalid_items_warned: Arc<AtomicBool>,
+    // Whether the optional CCU status-line preset was selected at startup.
+    ccu_status_line_preset_enabled: bool,
     // Shared latch so we only warn once about invalid terminal-title item IDs.
     terminal_title_invalid_items_warned: Arc<AtomicBool>,
     // Last terminal title emitted, to avoid writing duplicate OSC updates.
@@ -1073,34 +1080,53 @@ impl ChatWidget {
     }
 
     pub(crate) fn open_multi_agent_enable_prompt(&mut self) {
+        let enable_notice = crate::i18n::global().text("agent-enable-notice", None, || {
+            MULTI_AGENT_ENABLE_NOTICE.to_string()
+        });
         let items = vec![
             SelectionItem {
-                name: MULTI_AGENT_ENABLE_YES.to_string(),
-                description: Some(
-                    "Save the setting now. You will need a new session to use it.".to_string(),
-                ),
-                actions: vec![Box::new(|tx| {
+                name: crate::i18n::global().text("agent-enable-yes", None, || {
+                    MULTI_AGENT_ENABLE_YES.to_string()
+                }),
+                description: Some(crate::i18n::global().text(
+                    "agent-enable-description",
+                    None,
+                    || "Save the setting now. You will need a new session to use it.".to_string(),
+                )),
+                actions: vec![Box::new(move |tx| {
                     tx.send(AppEvent::UpdateFeatureFlags {
                         updates: vec![(Feature::Collab, true)],
                     });
                     tx.send(AppEvent::InsertHistoryCell(Box::new(
-                        history_cell::new_warning_event(MULTI_AGENT_ENABLE_NOTICE.to_string()),
+                        history_cell::new_warning_event(enable_notice.clone()),
                     )));
                 })],
                 dismiss_on_select: true,
                 ..Default::default()
             },
             SelectionItem {
-                name: MULTI_AGENT_ENABLE_NO.to_string(),
-                description: Some("Keep subagents disabled.".to_string()),
+                name: crate::i18n::global().text("agent-enable-no", None, || {
+                    MULTI_AGENT_ENABLE_NO.to_string()
+                }),
+                description: Some(crate::i18n::global().text(
+                    "agent-enable-no-description",
+                    None,
+                    || "Keep subagents disabled.".to_string(),
+                )),
                 dismiss_on_select: true,
                 ..Default::default()
             },
         ];
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some(MULTI_AGENT_ENABLE_TITLE.to_string()),
-            subtitle: Some("Subagents are currently disabled in your config.".to_string()),
+            title: Some(crate::i18n::global().text("agent-enable-title", None, || {
+                MULTI_AGENT_ENABLE_TITLE.to_string()
+            })),
+            subtitle: Some(
+                crate::i18n::global().text("agent-enable-subtitle", None, || {
+                    "Subagents are currently disabled in your config.".to_string()
+                }),
+            ),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             ..Default::default()
@@ -1125,10 +1151,14 @@ impl ChatWidget {
     pub(crate) fn open_memories_enable_prompt(&mut self) {
         let items = vec![
             SelectionItem {
-                name: MEMORIES_ENABLE_YES.to_string(),
-                description: Some(
-                    "Save the setting now. You will need a new session to use it.".to_string(),
-                ),
+                name: crate::i18n::global().text("memories-enable-yes", None, || {
+                    MEMORIES_ENABLE_YES.to_string()
+                }),
+                description: Some(crate::i18n::global().text(
+                    "memories-enable-description",
+                    None,
+                    || "Save the setting now. You will need a new session to use it.".to_string(),
+                )),
                 actions: vec![Box::new(|tx| {
                     tx.send(AppEvent::UpdateFeatureFlags {
                         updates: vec![(Feature::MemoryTool, true)],
@@ -1138,18 +1168,35 @@ impl ChatWidget {
                 ..Default::default()
             },
             SelectionItem {
-                name: MEMORIES_ENABLE_NO.to_string(),
-                description: Some("Keep memories disabled.".to_string()),
+                name: crate::i18n::global().text("memories-enable-no", None, || {
+                    MEMORIES_ENABLE_NO.to_string()
+                }),
+                description: Some(crate::i18n::global().text(
+                    "memories-enable-no-description",
+                    None,
+                    || "Keep memories disabled.".to_string(),
+                )),
                 dismiss_on_select: true,
                 ..Default::default()
             },
         ];
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some(MEMORIES_ENABLE_TITLE.to_string()),
-            subtitle: Some("Memories are currently disabled in your config.".to_string()),
+            title: Some(
+                crate::i18n::global().text("memories-enable-title", None, || {
+                    MEMORIES_ENABLE_TITLE.to_string()
+                }),
+            ),
+            subtitle: Some(
+                crate::i18n::global().text("memories-enable-subtitle", None, || {
+                    "Memories are currently disabled in your config.".to_string()
+                }),
+            ),
             footer_note: Some(Line::from(vec![
-                "Learn more: ".dim(),
+                crate::i18n::global()
+                    .text("memories-learn-more", None, || "Learn more:".to_string())
+                    .dim(),
+                " ".into(),
                 MEMORIES_DOC_URL.cyan().underlined(),
             ])),
             footer_hint: Some(standard_popup_hint_line()),
@@ -1484,7 +1531,9 @@ impl ChatWidget {
         self.unified_exec_processes.clear();
         self.sync_unified_exec_footer();
         self.add_info_message(
-            "Stopping all background terminals.".to_string(),
+            crate::i18n::global().text("stop-background-terminals", None, || {
+                "Stopping all background terminals.".to_string()
+            }),
             /*hint*/ None,
         );
     }
@@ -1547,9 +1596,11 @@ impl ChatWidget {
     }
 
     pub(crate) fn add_memories_enable_notice(&mut self) {
-        self.add_to_history(history_cell::new_warning_event(
-            MEMORIES_ENABLE_NOTICE.to_string(),
-        ));
+        self.add_to_history(history_cell::new_warning_event(crate::i18n::global().text(
+            "memories-enable-notice",
+            None,
+            || MEMORIES_ENABLE_NOTICE.to_string(),
+        )));
         self.request_redraw();
     }
 
@@ -2032,8 +2083,40 @@ impl Drop for ChatWidget {
     }
 }
 
-const PLACEHOLDER: &str = "Ask Codex to do anything";
-const SIDE_PLACEHOLDER: &str = "Ask a follow-up question";
+const PLACEHOLDERS: [(&str, &str); 8] = [
+    ("composer-explain-codebase", "Explain this codebase"),
+    ("composer-summarize-commits", "Summarize recent commits"),
+    ("composer-implement-feature", "Implement {feature}"),
+    ("composer-fix-file-bug", "Find and fix a bug in @filename"),
+    ("composer-write-file-tests", "Write tests for @filename"),
+    (
+        "composer-improve-file-docs",
+        "Improve documentation in @filename",
+    ),
+    (
+        "composer-review-current-changes",
+        "Run /review on my current changes",
+    ),
+    (
+        "composer-list-skills",
+        "Use /skills to list available skills",
+    ),
+];
+
+const SIDE_PLACEHOLDERS: [(&str, &str); 3] = [
+    (
+        "composer-side-check-compatibility",
+        "Check recently modified functions for compatibility",
+    ),
+    (
+        "composer-side-count-modified-files",
+        "How many files have been modified?",
+    ),
+    (
+        "composer-side-check-scale",
+        "Will this algorithm scale well?",
+    ),
+];
 
 // Extract the first bold (Markdown) element in the form **...** from `s`.
 // Returns the inner text if found; otherwise `None`.
