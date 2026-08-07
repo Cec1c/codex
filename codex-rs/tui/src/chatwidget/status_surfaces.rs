@@ -16,6 +16,9 @@ use codex_protocol::config_types::ApprovalsReviewer;
 use codex_protocol::config_types::ServiceTier;
 use codex_protocol::models::PermissionProfile;
 use codex_utils_sandbox_summary::summarize_permission_profile;
+use serde::Deserialize;
+use std::fs;
+use std::time::Duration as StdDuration;
 
 use super::status_state::TerminalTitleStatusKind;
 
@@ -51,6 +54,13 @@ struct StatusSurfaceSelections {
     invalid_terminal_title_items: Vec<String>,
 }
 
+fn format_status_line_duration(duration: StdDuration) -> String {
+    if duration < StdDuration::from_secs(1) {
+        return "0s".to_string();
+    }
+    codex_utils_elapsed::format_duration(StdDuration::from_secs(duration.as_secs()))
+}
+
 impl StatusSurfaceSelections {
     fn uses_git_branch(&self) -> bool {
         self.status_line_items.contains(&StatusLineItem::GitBranch)
@@ -82,6 +92,105 @@ impl StatusSurfaceSelections {
 pub(super) struct CachedProjectRootName {
     pub(super) cwd: PathBuf,
     pub(super) root_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CcuQuotaDocument {
+    accounts: Vec<CcuQuotaAccount>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CcuQuotaAccount {
+    #[serde(default)]
+    plan: String,
+    remaining_percent: Option<f64>,
+    weight: Option<f64>,
+    balance: Option<f64>,
+    currency: Option<String>,
+}
+
+#[derive(Debug, PartialEq)]
+pub(super) struct CcuQuotaSummary {
+    pub(super) balance: Option<(f64, String)>,
+    pub(super) remaining_percent: Option<u8>,
+}
+
+fn configured_ccu_quota() -> Option<CcuQuotaSummary> {
+    let path = std::env::var_os("CODEX_CCU_QUOTA_PATH")?;
+    let source = fs::read_to_string(path).ok()?;
+    parse_ccu_quota(&source)
+}
+
+pub(super) fn parse_ccu_quota(source: &str) -> Option<CcuQuotaSummary> {
+    let document: CcuQuotaDocument = serde_json::from_str(source).ok()?;
+    let mut weighted_remaining = 0.0;
+    let mut total_weight = 0.0;
+    let mut balance = 0.0;
+    let mut balance_currency = None::<String>;
+    let mut balance_is_usable = true;
+    let mut has_balance = false;
+    for account in document.accounts {
+        if let Some(account_balance) = account.balance {
+            let currency = account
+                .currency
+                .as_deref()
+                .map(str::trim)
+                .filter(|currency| !currency.is_empty() && currency.len() <= 12)
+                .unwrap_or("credits");
+            if account_balance.is_finite() && account_balance >= 0.0 {
+                if balance_currency
+                    .as_deref()
+                    .is_some_and(|existing| !existing.eq_ignore_ascii_case(currency))
+                {
+                    balance_is_usable = false;
+                } else {
+                    balance_currency.get_or_insert_with(|| {
+                        if currency.eq_ignore_ascii_case("credits") {
+                            "credits".to_string()
+                        } else {
+                            currency.to_uppercase()
+                        }
+                    });
+                    balance += account_balance;
+                    has_balance = true;
+                }
+            }
+        }
+
+        if let Some(remaining_percent) = account.remaining_percent
+            && remaining_percent.is_finite()
+            && (0.0..=100.0).contains(&remaining_percent)
+        {
+            let weight = account.weight.unwrap_or_else(|| {
+                if account.plan.eq_ignore_ascii_case("pro20x") {
+                    20.0
+                } else {
+                    1.0
+                }
+            });
+            if weight.is_finite() && weight > 0.0 {
+                weighted_remaining += remaining_percent * weight;
+                total_weight += weight;
+            }
+        }
+    }
+    let balance = (has_balance && balance_is_usable).then(|| {
+        (
+            balance,
+            balance_currency.unwrap_or_else(|| "credits".to_string()),
+        )
+    });
+    let remaining_percent = (total_weight > 0.0).then(|| {
+        (weighted_remaining / total_weight)
+            .round()
+            .clamp(0.0, 100.0) as u8
+    });
+    (balance.is_some() || remaining_percent.is_some()).then_some(CcuQuotaSummary {
+        balance,
+        remaining_percent,
+    })
 }
 
 impl ChatWidget {
@@ -406,10 +515,12 @@ impl ChatWidget {
 
     pub(super) fn configured_status_line_items(&self) -> Vec<String> {
         self.config.tui_status_line.clone().unwrap_or_else(|| {
-            DEFAULT_STATUS_LINE_ITEMS
-                .iter()
-                .map(ToString::to_string)
-                .collect()
+            let defaults = if self.ccu_status_line_preset_enabled {
+                &CCU_STATUS_LINE_ITEMS[..]
+            } else {
+                &DEFAULT_STATUS_LINE_ITEMS[..]
+            };
+            defaults.iter().map(ToString::to_string).collect()
         })
     }
 
@@ -655,7 +766,9 @@ impl ChatWidget {
     pub(super) fn status_line_value_for_item(&mut self, item: StatusLineItem) -> Option<String> {
         match item {
             StatusLineItem::ModelName => Some(self.model_display_name().to_string()),
-            StatusLineItem::ModelWithReasoning => Some(self.model_with_reasoning_display_name()),
+            StatusLineItem::ModelWithReasoning => {
+                Some(self.status_line_model_with_reasoning_display_name())
+            }
             StatusLineItem::Reasoning => Some(self.reasoning_display_name()),
             StatusLineItem::CurrentDir => {
                 Some(format_directory_display(
@@ -690,15 +803,110 @@ impl ChatWidget {
                 if total <= 0 {
                     None
                 } else {
-                    Some(format!("{} used", format_tokens_compact(total)))
+                    let tokens = format_tokens_compact(total);
+                    Some(crate::i18n::global().text_with_string_arg(
+                        "status-line-tokens-used",
+                        "tokens",
+                        tokens.as_str(),
+                        || format!("{tokens} used"),
+                    ))
                 }
             }
-            StatusLineItem::ContextRemaining => self
-                .status_line_context_remaining_percent()
-                .map(|remaining| format!("Context {remaining}% left")),
-            StatusLineItem::ContextUsed => self
-                .status_line_context_used_percent()
-                .map(|used| format!("Context {used}% used")),
+            StatusLineItem::ContextRemaining => {
+                self.status_line_context_remaining_percent()
+                    .map(|remaining| {
+                        crate::i18n::global().text_with_string_arg(
+                            "status-line-context-remaining",
+                            "percent",
+                            remaining.to_string(),
+                            || format!("Context {remaining}% left"),
+                        )
+                    })
+            }
+            StatusLineItem::ContextUsed => self.status_line_context_used_percent().map(|used| {
+                crate::i18n::global().text_with_string_arg(
+                    "status-line-context-used",
+                    "percent",
+                    used.to_string(),
+                    || format!("Context {used}% used"),
+                )
+            }),
+            StatusLineItem::ContextTokens => self.status_line_context_window_size().map(|window| {
+                let used = self.status_line_context_used_tokens();
+                format!(
+                    "{}/{}",
+                    format_tokens_compact(used),
+                    format_tokens_compact(window)
+                )
+            }),
+            StatusLineItem::ContextProgress => {
+                let used = self
+                    .status_line_context_used_percent()
+                    .unwrap_or(0)
+                    .clamp(0, 100) as u8;
+                Some(crate::ccu_theme::render_progress(used))
+            }
+            StatusLineItem::SessionTiming => {
+                let now = Instant::now();
+                let session = now.saturating_duration_since(self.terminal_title_animation_origin);
+                let active = self
+                    .turn_lifecycle
+                    .goal_status_active_turn_started_at
+                    .map(|started| now.saturating_duration_since(started))
+                    .unwrap_or(StdDuration::ZERO);
+                Some(format!(
+                    "⏱ {} ⚡{}",
+                    format_status_line_duration(session),
+                    format_status_line_duration(active)
+                ))
+            }
+            StatusLineItem::Quota => {
+                let configured = configured_ccu_quota();
+                if let Some((balance, currency)) = configured
+                    .as_ref()
+                    .and_then(|summary| summary.balance.as_ref())
+                {
+                    return Some(format!("{balance:.2} {currency}"));
+                }
+                if let Some(credits) = self.status_line_credit_balance() {
+                    return Some(credits);
+                }
+                if let Some(percent) = configured.and_then(|summary| summary.remaining_percent) {
+                    return Some(crate::i18n::global().text_with_string_arg(
+                        "status-line-quota-remaining",
+                        "percent",
+                        percent.to_string(),
+                        || format!("Quota {percent}%"),
+                    ));
+                }
+                let remaining = self
+                    .rate_limit_snapshots_by_limit_id
+                    .values()
+                    .filter_map(|snapshot| {
+                        snapshot
+                            .individual_limit
+                            .as_ref()
+                            .map(|limit| limit.percent_remaining)
+                            .or_else(|| {
+                                snapshot
+                                    .primary
+                                    .as_ref()
+                                    .map(|window| 100.0 - window.used_percent)
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                if !remaining.is_empty() {
+                    let percent =
+                        (remaining.iter().sum::<f64>() / remaining.len() as f64).round() as u8;
+                    return Some(crate::i18n::global().text_with_string_arg(
+                        "status-line-quota-remaining",
+                        "percent",
+                        percent.to_string(),
+                        || format!("Quota {percent}%"),
+                    ));
+                }
+                None
+            }
             StatusLineItem::FiveHourLimit => {
                 let (window, is_secondary) = self
                     .rate_limit_snapshots_by_limit_id
@@ -778,6 +986,10 @@ impl ChatWidget {
             StatusSurfacePreviewItem::ApprovalMode => StatusLineItem::ApprovalMode,
             StatusSurfacePreviewItem::ContextRemaining => StatusLineItem::ContextRemaining,
             StatusSurfacePreviewItem::ContextUsed => StatusLineItem::ContextUsed,
+            StatusSurfacePreviewItem::ContextTokens => StatusLineItem::ContextTokens,
+            StatusSurfacePreviewItem::ContextProgress => StatusLineItem::ContextProgress,
+            StatusSurfacePreviewItem::SessionTiming => StatusLineItem::SessionTiming,
+            StatusSurfacePreviewItem::Quota => StatusLineItem::Quota,
             StatusSurfacePreviewItem::FiveHourLimit => StatusLineItem::FiveHourLimit,
             StatusSurfacePreviewItem::WeeklyLimit => StatusLineItem::WeeklyLimit,
             StatusSurfacePreviewItem::CodexVersion => StatusLineItem::CodexVersion,
@@ -872,8 +1084,25 @@ impl ChatWidget {
 
     fn model_with_reasoning_display_name(&self) -> String {
         let label = self.reasoning_display_name();
-        let service_tier_label = self
-            .current_service_tier()
+        let service_tier_label = self.model_service_tier_display_name();
+        service_tier_label.map_or_else(
+            || format!("{} {label}", self.model_display_name()),
+            |service_tier| format!("{} {label} {service_tier}", self.model_display_name()),
+        )
+    }
+
+    fn status_line_model_with_reasoning_display_name(&self) -> String {
+        let reasoning = self.reasoning_display_name();
+        let service_tier = self.model_service_tier_display_name();
+        crate::ccu_theme::format_status_line_model(
+            self.model_display_name(),
+            &reasoning,
+            service_tier.as_deref(),
+        )
+    }
+
+    fn model_service_tier_display_name(&self) -> Option<String> {
+        self.current_service_tier()
             .and_then(|service_tier| {
                 self.current_model_service_tier_commands()
                     .into_iter()
@@ -881,9 +1110,36 @@ impl ChatWidget {
                     .map(|tier| tier.name)
             })
             .filter(|_| self.has_chatgpt_account)
-            .map(|tier| format!(" {tier}"))
-            .unwrap_or_default();
-        format!("{} {label}{service_tier_label}", self.model_display_name())
+    }
+
+    pub(super) fn status_line_credit_balance(&self) -> Option<String> {
+        let snapshots = self
+            .rate_limit_snapshots_by_limit_id
+            .get("codex")
+            .into_iter()
+            .chain(
+                self.rate_limit_snapshots_by_limit_id
+                    .values()
+                    .filter(|snapshot| snapshot.limit_name != "codex"),
+            );
+        for credits in snapshots.filter_map(|snapshot| snapshot.credits.as_ref()) {
+            if credits.unlimited {
+                return Some("∞ credits".to_string());
+            }
+            if !credits.has_credits {
+                continue;
+            }
+            let Some(value) = credits
+                .balance
+                .as_deref()
+                .and_then(|value| value.trim().parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value >= 0.0)
+            else {
+                continue;
+            };
+            return Some(format!("{value:.2} credits"));
+        }
+        None
     }
 
     /// Computes the compact runtime status label used by word-based status items.

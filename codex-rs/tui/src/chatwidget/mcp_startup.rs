@@ -267,11 +267,23 @@ impl ChatWidget {
         let status = match notification.status {
             McpServerStartupState::Starting => McpStartupStatus::Starting,
             McpServerStartupState::Ready => McpStartupStatus::Ready,
-            McpServerStartupState::Failed => McpStartupStatus::Failed {
-                error: notification.error.unwrap_or_else(|| {
-                    format!("MCP client for `{}` failed to start", notification.name)
-                }),
-            },
+            McpServerStartupState::Failed => {
+                let english_prefix =
+                    format!("MCP client for `{}` failed to start", notification.name);
+                let error = notification.error.unwrap_or_else(|| english_prefix.clone());
+                let localized_prefix = crate::i18n::global().text_with_string_arg(
+                    "mcp-client-failed-to-start",
+                    "name",
+                    notification.name.as_str(),
+                    || english_prefix.clone(),
+                );
+                let error = error
+                    .strip_prefix(&english_prefix)
+                    .map_or(error.clone(), |suffix| {
+                        format!("{localized_prefix}{suffix}")
+                    });
+                McpStartupStatus::Failed { error }
+            }
             McpServerStartupState::Cancelled => McpStartupStatus::Cancelled,
         };
         self.update_mcp_startup_status(
