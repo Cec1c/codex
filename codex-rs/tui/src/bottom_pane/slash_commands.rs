@@ -309,6 +309,7 @@ mod tests {
                 SlashCommand::Mention,
                 SlashCommand::Status,
                 SlashCommand::Usage,
+                SlashCommand::Language,
             ]
         );
     }

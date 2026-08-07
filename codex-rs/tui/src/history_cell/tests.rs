@@ -653,6 +653,18 @@ fn final_message_separator_includes_worked_label_after_one_minute() {
 }
 
 #[test]
+fn worked_for_uses_zh_hans_localizer() {
+    let localizer =
+        crate::i18n::Localizer::from_ftl("zh-Hans", "history-worked-for = 工作了 { $duration }\n");
+    let separator = FinalMessageSeparator::new(Some(477), None);
+
+    assert_eq!(
+        separator.label_parts_with_localizer(&localizer),
+        vec!["工作了 7m 57s".to_string()]
+    );
+}
+
+#[test]
 fn ps_output_empty_snapshot() {
     let cell = new_unified_exec_processes_output(Vec::new());
     let rendered = render_lines(&cell.display_lines(/*width*/ 60)).join("\n");
@@ -1209,6 +1221,22 @@ fn standalone_windows_update_available_history_cell_snapshot() {
 fn pnpm_update_available_history_cell_snapshot() {
     let cell =
         UpdateAvailableHistoryCell::new("9.9.9".to_string(), Some(UpdateAction::PnpmGlobalLatest));
+    let rendered = render_lines(&cell.display_lines(/*width*/ 110)).join("\n");
+
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn ccu_update_available_history_cell_snapshot() {
+    let cell = UpdateAvailableHistoryCell::new(
+        "0.1.5".to_string(),
+        Some(UpdateAction::CcuManager {
+            manager_path: r"C:\ccu\bin\ccu-manager.exe".to_string(),
+            current_version: "0.1.4".to_string(),
+            target_version: "0.1.5".to_string(),
+            release_url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.5".to_string(),
+        }),
+    );
     let rendered = render_lines(&cell.display_lines(/*width*/ 110)).join("\n");
 
     insta::assert_snapshot!(rendered);

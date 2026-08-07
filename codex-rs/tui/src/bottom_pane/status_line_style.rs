@@ -7,6 +7,7 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 
 use super::status_line_setup::StatusLineItem;
+use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::render::highlight::foreground_style_for_scopes;
 
 const STATUS_LINE_SEPARATOR: &str = " · ";
@@ -40,11 +41,16 @@ impl StatusLineAccent {
             StatusLineItem::Status => Self::State,
             StatusLineItem::ContextRemaining
             | StatusLineItem::ContextUsed
+            | StatusLineItem::ContextTokens
             | StatusLineItem::ContextWindowSize
             | StatusLineItem::UsedTokens
             | StatusLineItem::TotalInputTokens
             | StatusLineItem::TotalOutputTokens => Self::Usage,
-            StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit => Self::Limit,
+            StatusLineItem::ContextProgress => Self::Progress,
+            StatusLineItem::SessionTiming => Self::Metadata,
+            StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit | StatusLineItem::Quota => {
+                Self::Limit
+            }
             StatusLineItem::CodexVersion | StatusLineItem::SessionId => Self::Metadata,
             StatusLineItem::FastMode | StatusLineItem::RawOutput => Self::Mode,
             StatusLineItem::Permissions => Self::Mode,
@@ -76,6 +82,17 @@ impl StatusLineAccent {
             Self::Branch | Self::Limit | Self::Thread => Style::default().magenta(),
         }
     }
+
+    fn ccu_role(self) -> &'static str {
+        match self {
+            Self::Model => "model",
+            Self::Usage => "usage",
+            Self::Progress => "progress",
+            Self::Limit => "quota",
+            Self::State | Self::Mode | Self::Metadata => "time",
+            Self::Path | Self::Branch | Self::Thread => "usage",
+        }
+    }
 }
 
 pub(crate) fn status_line_from_segments<I>(
@@ -85,11 +102,16 @@ pub(crate) fn status_line_from_segments<I>(
 where
     I: IntoIterator<Item = (StatusLineItem, String)>,
 {
-    status_line_from_segments_with_resolver(segments, use_theme_colors, |accent| {
-        foreground_style_for_scopes(accent.scopes())
-    })
+    let ccu_theme = use_theme_colors.then(crate::ccu_theme::active).flatten();
+    status_line_from_segments_with_theme(
+        segments,
+        use_theme_colors,
+        |accent| foreground_style_for_scopes(accent.scopes()),
+        ccu_theme,
+    )
 }
 
+#[cfg(test)]
 fn status_line_from_segments_with_resolver<I, F>(
     segments: I,
     use_theme_colors: bool,
@@ -99,15 +121,41 @@ where
     I: IntoIterator<Item = (StatusLineItem, String)>,
     F: Fn(StatusLineAccent) -> Option<Style>,
 {
+    status_line_from_segments_with_theme(segments, use_theme_colors, theme_style_for_accent, None)
+}
+
+fn status_line_from_segments_with_theme<I, F>(
+    segments: I,
+    use_theme_colors: bool,
+    theme_style_for_accent: F,
+    ccu_theme: Option<&crate::ccu_theme::CcuTheme>,
+) -> Option<Line<'static>>
+where
+    I: IntoIterator<Item = (StatusLineItem, String)>,
+    F: Fn(StatusLineAccent) -> Option<Style>,
+{
     let mut spans = Vec::new();
+    let separator = ccu_theme
+        .map(super::super::ccu_theme::CcuTheme::separator)
+        .unwrap_or(STATUS_LINE_SEPARATOR);
     for (item, text) in segments {
         if !spans.is_empty() {
-            spans.push(STATUS_LINE_SEPARATOR.dim());
+            spans.push(
+                ccu_theme
+                    .and_then(|theme| theme.status_style("separator"))
+                    .map_or_else(
+                        || Span::from(separator.to_string()).dim(),
+                        |style| Span::styled(separator.to_string(), style),
+                    ),
+            );
         }
         let style = if use_theme_colors {
             let accent = StatusLineAccent::for_item(item);
             soften_status_line_style(
-                theme_style_for_accent(accent).unwrap_or_else(|| accent.fallback_style()),
+                ccu_theme
+                    .and_then(|theme| theme.status_style(accent.ccu_role()))
+                    .or_else(|| theme_style_for_accent(accent))
+                    .unwrap_or_else(|| accent.fallback_style()),
             )
         } else {
             Style::default().dim()
@@ -121,6 +169,27 @@ where
     }
 
     (!spans.is_empty()).then(|| Line::from(spans))
+}
+
+/// Fits a structured status line by removing complete trailing segments before truncating text.
+///
+/// `status_line_from_segments` emits one span per value with one separator span between values.
+/// Removing two spans at a time therefore preserves the most important leading items and avoids
+/// half-visible progress bars or timers on narrow terminals. The default CCU order
+/// intentionally places progressively less essential items to the right.
+pub(crate) fn fit_status_line_to_width(mut line: Line<'static>, max_width: usize) -> Line<'static> {
+    if line.width() <= max_width {
+        return line;
+    }
+
+    while line.spans.len() >= 3 {
+        line.spans.truncate(line.spans.len() - 2);
+        if line.width() <= max_width {
+            return line;
+        }
+    }
+
+    truncate_line_with_ellipsis_if_overflow(line, max_width)
 }
 
 fn soften_status_line_style(mut style: Style) -> Style {
@@ -296,5 +365,29 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn responsive_status_line_drops_complete_trailing_segments() {
+        let line = Line::from(vec![
+            "🦊 gpt-5.6-sol[xhigh]".cyan(),
+            " │ ".dim(),
+            "42.7K/353K".green(),
+            " │ ".dim(),
+            "[█░░░░░░░░░] 9%".green(),
+            " │ ".dim(),
+            "⏱ 1s ⚡0s".cyan(),
+        ]);
+
+        let rendered = [72, 60, 40, 16]
+            .into_iter()
+            .map(|width| {
+                let fitted = fit_status_line_to_width(line.clone(), width);
+                format!("{width:>2}: {}", line_text(&fitted))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        insta::assert_snapshot!("ccu_status_line_responsive_widths", rendered);
     }
 }
