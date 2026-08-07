@@ -238,7 +238,7 @@ impl WidgetRef for &UpdatePromptScreen {
         column.push(selection_option_row(
             0,
             if managed_by_ccu {
-                "升级（打开 CCU Manager 并自动开始）".to_string()
+                "升级（先在 CCU Manager 确认代理）".to_string()
             } else {
                 format!("Update now (runs `{update_command}`)")
             },
@@ -272,7 +272,7 @@ impl WidgetRef for &UpdatePromptScreen {
                 },
                 key_hint::plain(KeyCode::Enter).into(),
                 if managed_by_ccu {
-                    " 继续；下载进度将在 Manager 中显示".dim()
+                    " 打开 Manager；确认代理后按 u 开始下载".dim()
                 } else {
                     " to continue".dim()
                 },

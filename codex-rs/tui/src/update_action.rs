@@ -10,7 +10,7 @@ use codex_install_context::StandalonePlatform;
 /// Update action the CLI should perform after the TUI exits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateAction {
-    /// Open CCU Manager and immediately upgrade the complete managed distribution.
+    /// Open CCU Manager with the selected target so the user can review network settings.
     CcuManager {
         manager_path: String,
         current_version: String,
@@ -60,7 +60,6 @@ impl UpdateAction {
                     "--upgrade".to_string(),
                     "--target".to_string(),
                     target_version.clone(),
-                    "--auto-start".to_string(),
                 ],
             ),
             UpdateAction::NpmGlobalLatest => (
@@ -270,7 +269,6 @@ mod tests {
                     "--upgrade".to_string(),
                     "--target".to_string(),
                     "0.1.5".to_string(),
-                    "--auto-start".to_string(),
                 ],
             )
         );
