@@ -68,6 +68,10 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 
+fn approval_text(key: &str, english: &str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 /// Request coming from the agent that needs user approval.
 #[derive(Clone, Debug)]
 pub(crate) enum ApprovalRequest {
@@ -258,7 +262,12 @@ impl ApprovalOverlay {
                     approval_keymap,
                 ),
                 request.network_approval_context.as_ref().map_or_else(
-                    || "Would you like to run the following command?".to_string(),
+                    || {
+                        approval_text(
+                            "approval-run-command-title",
+                            "Would you like to run the following command?",
+                        )
+                    },
                     |network_approval_context| {
                         format!(
                             "Do you want to approve network access to \"{}\"?",
@@ -269,11 +278,17 @@ impl ApprovalOverlay {
             ),
             ApprovalRequest::Permissions(_) => (
                 permissions_options(approval_keymap),
-                "Would you like to grant these permissions?".to_string(),
+                approval_text(
+                    "approval-grant-permissions-title",
+                    "Would you like to grant these permissions?",
+                ),
             ),
             ApprovalRequest::ApplyPatch(_) => (
                 patch_options(approval_keymap),
-                "Would you like to make the following edits?".to_string(),
+                approval_text(
+                    "approval-apply-patch-title",
+                    "Would you like to make the following edits?",
+                ),
             ),
             ApprovalRequest::McpElicitation(request) => (
                 elicitation_options(approval_keymap),
@@ -415,13 +430,25 @@ impl ApprovalOverlay {
         );
         if request.thread_label().is_none() {
             let message = if granted_permissions.is_empty() {
-                "You did not grant additional permissions"
+                approval_text(
+                    "approval-grant-result-denied",
+                    "You did not grant additional permissions",
+                )
             } else if strict_auto_review {
-                "You granted additional permissions with strict auto review"
+                approval_text(
+                    "approval-grant-result-strict-review",
+                    "You granted additional permissions with strict auto review",
+                )
             } else if matches!(scope, PermissionGrantScope::Session) {
-                "You granted additional permissions for this session"
+                approval_text(
+                    "approval-grant-result-session",
+                    "You granted additional permissions for this session",
+                )
             } else {
-                "You granted additional permissions"
+                approval_text(
+                    "approval-grant-result-turn",
+                    "You granted additional permissions",
+                )
             };
             self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
                 crate::history_cell::PlainHistoryCell::new(vec![message.into()]),
@@ -634,12 +661,17 @@ fn approval_footer_hint(
         && let Some(open_thread) =
             approval_keymap.primary_hint("open_thread", &approval_keymap.open_thread)
     {
+        let or = crate::i18n::global().text("popup-hint-or", None, || "or".to_string());
+        let press = crate::i18n::global().text("popup-hint-press", None, || "Press".to_string());
+        let open_thread_label = crate::i18n::global().text("popup-hint-open-thread", None, || {
+            "to open thread".to_string()
+        });
         if !spans.is_empty() {
-            spans.push(" or ".into());
+            spans.push(format!(" {or} ").into());
         } else {
-            spans.push("Press ".into());
+            spans.push(format!("{press} ").into());
         }
-        spans.extend([open_thread.into(), " to open thread".into()]);
+        spans.extend([open_thread.into(), format!(" {open_thread_label}").into()]);
     }
     Line::from(spans)
 }
@@ -679,27 +711,38 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut header: Vec<Line<'static>> = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 header.push(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(environment_id) = &request.environment_id {
                 header.push(Line::from(vec![
-                    "Environment: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-environment", "Environment")
+                    )
+                    .into(),
                     environment_id.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(reason) = &request.reason {
-                header.push(Line::from(vec!["Reason: ".into(), reason.clone().italic()]));
+                header.push(Line::from(vec![
+                    format!("{}: ", approval_text("approval-label-reason", "Reason")).into(),
+                    reason.clone().italic(),
+                ]));
                 header.push(Line::from(""));
             }
             if let Some(additional_permissions) = &request.additional_permissions
                 && let Some(rule_line) = format_additional_permissions_rule(additional_permissions)
             {
                 header.push(Line::from(vec![
-                    "Permission rule: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-permission-rule", "Permission rule")
+                    )
+                    .into(),
                     rule_line.cyan(),
                 ]));
                 header.push(Line::from(""));
@@ -718,25 +761,36 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut header: Vec<Line<'static>> = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 header.push(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(environment_id) = &request.environment_id {
                 header.push(Line::from(vec![
-                    "Environment: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-environment", "Environment")
+                    )
+                    .into(),
                     environment_id.clone().bold(),
                 ]));
                 header.push(Line::from(""));
             }
             if let Some(reason) = &request.reason {
-                header.push(Line::from(vec!["Reason: ".into(), reason.clone().italic()]));
+                header.push(Line::from(vec![
+                    format!("{}: ", approval_text("approval-label-reason", "Reason")).into(),
+                    reason.clone().italic(),
+                ]));
                 header.push(Line::from(""));
             }
             if let Some(rule_line) = format_requested_permissions_rule(&request.permissions) {
                 header.push(Line::from(vec![
-                    "Permission rule: ".into(),
+                    format!(
+                        "{}: ",
+                        approval_text("approval-label-permission-rule", "Permission rule")
+                    )
+                    .into(),
                     rule_line.cyan(),
                 ]));
             }
@@ -746,7 +800,7 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut header: Vec<Box<dyn Renderable>> = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 header.push(Box::new(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ])));
             }
@@ -758,7 +812,7 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
                 }
                 header.push(Box::new(
                     Paragraph::new(Line::from_iter([
-                        "Reason: ".into(),
+                        format!("{}: ", approval_text("approval-label-reason", "Reason")).into(),
                         reason.clone().italic(),
                     ]))
                     .wrap(Wrap { trim: false }),
@@ -770,13 +824,16 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             let mut lines = Vec::new();
             if let Some(thread_label) = &request.thread_label {
                 lines.push(Line::from(vec![
-                    "Thread: ".into(),
+                    format!("{}: ", approval_text("approval-label-thread", "Thread")).into(),
                     thread_label.clone().bold(),
                 ]));
                 lines.push(Line::from(""));
             }
             lines.extend([
-                Line::from(vec!["Server: ".into(), request.server_name.clone().bold()]),
+                Line::from(vec![
+                    format!("{}: ", approval_text("approval-label-server", "Server")).into(),
+                    request.server_name.clone().bold(),
+                ]),
                 Line::from(""),
                 Line::from(request.message.clone()),
             ]);
@@ -841,9 +898,9 @@ fn exec_options(
         .filter_map(|decision| match decision {
             CommandExecutionApprovalDecision::Accept => Some(ApprovalOption {
                 label: if network_approval_context.is_some() {
-                    "Yes, just this once".to_string()
+                    approval_text("approval-yes-once", "Yes, just this once")
                 } else {
-                    "Yes, proceed".to_string()
+                    approval_text("approval-yes-proceed", "Yes, proceed")
                 },
                 decision: ApprovalDecision::Command(CommandExecutionApprovalDecision::Accept),
                 shortcuts: keymap.approve.clone(),
@@ -857,8 +914,15 @@ fn exec_options(
                 }
 
                 Some(ApprovalOption {
-                    label: format!(
-                        "Yes, and don't ask again for commands that start with `{rendered_prefix}`"
+                    label: crate::i18n::global().text_with_string_arg(
+                        "approval-allow-command-prefix",
+                        "prefix",
+                        rendered_prefix.clone(),
+                        || {
+                            format!(
+                                "Yes, and don't ask again for commands that start with `{rendered_prefix}`"
+                            )
+                        },
                     ),
                     decision: ApprovalDecision::Command(
                         CommandExecutionApprovalDecision::AcceptWithExecpolicyAmendment {
@@ -870,11 +934,20 @@ fn exec_options(
             }
             CommandExecutionApprovalDecision::AcceptForSession => Some(ApprovalOption {
                 label: if network_approval_context.is_some() {
-                    "Yes, and allow this host for this conversation".to_string()
+                    approval_text(
+                        "approval-allow-host-conversation",
+                        "Yes, and allow this host for this conversation",
+                    )
                 } else if additional_permissions.is_some() {
-                    "Yes, and allow these permissions for this session".to_string()
+                    approval_text(
+                        "approval-allow-permissions-session",
+                        "Yes, and allow these permissions for this session",
+                    )
                 } else {
-                    "Yes, and don't ask again for this command in this session".to_string()
+                    approval_text(
+                        "approval-allow-command-session",
+                        "Yes, and don't ask again for this command in this session",
+                    )
                 },
                 decision: ApprovalDecision::Command(
                     CommandExecutionApprovalDecision::AcceptForSession,
@@ -886,11 +959,17 @@ fn exec_options(
             } => {
                 let (label, shortcuts) = match network_policy_amendment.action {
                     NetworkPolicyRuleAction::Allow => (
-                        "Yes, and allow this host in the future".to_string(),
+                        approval_text(
+                            "approval-allow-host-future",
+                            "Yes, and allow this host in the future",
+                        ),
                         keymap.approve_for_prefix.clone(),
                     ),
                     NetworkPolicyRuleAction::Deny => (
-                        "No, and block this host in the future".to_string(),
+                        approval_text(
+                            "approval-block-host-future",
+                            "No, and block this host in the future",
+                        ),
                         keymap.deny.clone(),
                     ),
                 };
@@ -905,12 +984,18 @@ fn exec_options(
                 })
             }
             CommandExecutionApprovalDecision::Decline => Some(ApprovalOption {
-                label: "No, continue without running it".to_string(),
+                label: approval_text(
+                    "approval-decline-command",
+                    "No, continue without running it",
+                ),
                 decision: ApprovalDecision::Command(CommandExecutionApprovalDecision::Decline),
                 shortcuts: keymap.deny.clone(),
             }),
             CommandExecutionApprovalDecision::Cancel => Some(ApprovalOption {
-                label: "No, and tell Codex what to do differently".to_string(),
+                label: approval_text(
+                    "approval-tell-codex",
+                    "No, and tell Codex what to do differently",
+                ),
                 decision: ApprovalDecision::Command(CommandExecutionApprovalDecision::Cancel),
                 shortcuts: keymap.decline.clone(),
             }),
@@ -928,7 +1013,7 @@ pub(crate) fn format_additional_permissions_rule(
         .and_then(|network| network.enabled)
         .unwrap_or(false)
     {
-        parts.push("network".to_string());
+        parts.push(approval_text("approval-permission-network", "network"));
     }
     if let Some(file_system) = additional_permissions.file_system.as_ref() {
         let reads = format_file_system_entry_paths(
@@ -939,7 +1024,12 @@ pub(crate) fn format_additional_permissions_rule(
                 .filter(|entry| entry.access == FileSystemAccessMode::Read),
         );
         if !reads.is_empty() {
-            parts.push(format!("read {reads}"));
+            parts.push(crate::i18n::global().text_with_string_arg(
+                "approval-permission-read",
+                "paths",
+                reads.clone(),
+                || format!("read {reads}"),
+            ));
         }
         let writes = format_file_system_entry_paths(
             file_system
@@ -949,7 +1039,12 @@ pub(crate) fn format_additional_permissions_rule(
                 .filter(|entry| entry.access == FileSystemAccessMode::Write),
         );
         if !writes.is_empty() {
-            parts.push(format!("write {writes}"));
+            parts.push(crate::i18n::global().text_with_string_arg(
+                "approval-permission-write",
+                "paths",
+                writes.clone(),
+                || format!("write {writes}"),
+            ));
         }
         let denied_reads = format_file_system_entry_paths(
             file_system
@@ -959,7 +1054,12 @@ pub(crate) fn format_additional_permissions_rule(
                 .filter(|entry| entry.access == FileSystemAccessMode::Deny),
         );
         if !denied_reads.is_empty() {
-            parts.push(format!("deny read {denied_reads}"));
+            parts.push(crate::i18n::global().text_with_string_arg(
+                "approval-permission-deny-read",
+                "paths",
+                denied_reads.clone(),
+                || format!("deny read {denied_reads}"),
+            ));
         }
     }
     if parts.is_empty() {
@@ -1016,17 +1116,23 @@ fn path_label(base: &str, subpath: &Option<LegacyAppPathString>) -> String {
 fn patch_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
     vec![
         ApprovalOption {
-            label: "Yes, proceed".to_string(),
+            label: approval_text("approval-yes-proceed", "Yes, proceed"),
             decision: ApprovalDecision::FileChange(FileChangeApprovalDecision::Accept),
             shortcuts: keymap.approve.clone(),
         },
         ApprovalOption {
-            label: "Yes, and don't ask again for these files".to_string(),
+            label: approval_text(
+                "approval-allow-files-session",
+                "Yes, and don't ask again for these files",
+            ),
             decision: ApprovalDecision::FileChange(FileChangeApprovalDecision::AcceptForSession),
             shortcuts: keymap.approve_for_session.clone(),
         },
         ApprovalOption {
-            label: "No, and tell Codex what to do differently".to_string(),
+            label: approval_text(
+                "approval-tell-codex",
+                "No, and tell Codex what to do differently",
+            ),
             decision: ApprovalDecision::FileChange(FileChangeApprovalDecision::Cancel),
             shortcuts: keymap.decline.clone(),
         },
@@ -1043,24 +1149,36 @@ fn permissions_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
 
     vec![
         ApprovalOption {
-            label: "Yes, grant these permissions for this turn".to_string(),
+            label: approval_text(
+                "approval-grant-permissions-turn",
+                "Yes, grant these permissions for this turn",
+            ),
             decision: ApprovalDecision::Permissions(PermissionsDecision::GrantForTurn),
             shortcuts: keymap.approve.clone(),
         },
         ApprovalOption {
-            label: "Yes, grant for this turn with strict auto review".to_string(),
+            label: approval_text(
+                "approval-grant-strict-review-turn",
+                "Yes, grant for this turn with strict auto review",
+            ),
             decision: ApprovalDecision::Permissions(
                 PermissionsDecision::GrantForTurnWithStrictAutoReview,
             ),
             shortcuts: vec![key_hint::plain(KeyCode::Char('r'))],
         },
         ApprovalOption {
-            label: "Yes, grant these permissions for this session".to_string(),
+            label: approval_text(
+                "approval-grant-permissions-session",
+                "Yes, grant these permissions for this session",
+            ),
             decision: ApprovalDecision::Permissions(PermissionsDecision::GrantForSession),
             shortcuts: keymap.approve_for_session.clone(),
         },
         ApprovalOption {
-            label: "No, continue without permissions".to_string(),
+            label: approval_text(
+                "approval-continue-without-permissions",
+                "No, continue without permissions",
+            ),
             decision: ApprovalDecision::Permissions(PermissionsDecision::Deny),
             shortcuts: deny_shortcuts,
         },
@@ -1091,17 +1209,23 @@ fn elicitation_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
 
     vec![
         ApprovalOption {
-            label: "Yes, provide the requested info".to_string(),
+            label: approval_text(
+                "approval-provide-requested-info",
+                "Yes, provide the requested info",
+            ),
             decision: ApprovalDecision::McpElicitation(McpServerElicitationAction::Accept),
             shortcuts: keymap.approve.clone(),
         },
         ApprovalOption {
-            label: "No, but continue without it".to_string(),
+            label: approval_text(
+                "approval-continue-without-info",
+                "No, but continue without it",
+            ),
             decision: ApprovalDecision::McpElicitation(McpServerElicitationAction::Decline),
             shortcuts: decline_shortcuts,
         },
         ApprovalOption {
-            label: "Cancel this request".to_string(),
+            label: approval_text("approval-cancel-request", "Cancel this request"),
             decision: ApprovalDecision::McpElicitation(McpServerElicitationAction::Cancel),
             shortcuts: cancel_shortcuts,
         },

@@ -34,11 +34,11 @@ impl SearchMode {
         }
     }
 
-    pub(super) fn label(self) -> &'static str {
+    pub(super) fn label(self) -> String {
         match self {
-            Self::Results => "All Results",
-            Self::FilesystemOnly => "Filesystem Only",
-            Self::Tools => "Plugins",
+            Self::Results => super::i18n::text("mention-mode-all", "All Results"),
+            Self::FilesystemOnly => super::i18n::text("mention-mode-filesystem", "Filesystem Only"),
+            Self::Tools => super::i18n::text("mention-mode-tools", "Plugins"),
         }
     }
 }
