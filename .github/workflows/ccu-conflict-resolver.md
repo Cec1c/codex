@@ -125,13 +125,7 @@ tools:
   timeout: 1200
   edit:
   bash:
-    - "cat *"
-    - "cargo *"
-    - "git *"
-    - "jq *"
-    - "just *"
-    - "rg *"
-    - "sed *"
+    - "*"
 timeout-minutes: 90
 sandbox:
   agent:
