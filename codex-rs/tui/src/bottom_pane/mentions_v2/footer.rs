@@ -42,13 +42,21 @@ pub(super) fn render_footer(area: Rect, buf: &mut Buffer, search_mode: SearchMod
 fn footer_hint_line() -> Line<'static> {
     Line::from(vec![
         key_hint::plain(KeyCode::Enter).into(),
-        " insert · ".dim(),
+        format!(
+            " {} · ",
+            super::i18n::text("mention-footer-insert", "insert")
+        )
+        .dim(),
         key_hint::plain(KeyCode::Esc).into(),
-        " close · ".dim(),
+        format!(" {} · ", super::i18n::text("mention-footer-close", "close")).dim(),
         key_hint::plain(KeyCode::Left).into(),
         "/".dim(),
         key_hint::plain(KeyCode::Right).into(),
-        " switch search modes".dim(),
+        format!(
+            " {}",
+            super::i18n::text("mention-footer-switch-mode", "switch search modes")
+        )
+        .dim(),
     ])
 }
 

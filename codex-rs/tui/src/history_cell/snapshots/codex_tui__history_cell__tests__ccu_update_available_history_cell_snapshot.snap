@@ -1,0 +1,11 @@
+---
+source: tui/src/history_cell/tests.rs
+expression: rendered
+---
+╭──────────────────────────────────────────────────────────────────────────────────────╮
+│ ✨ CCU update available! 0.1.4 -> 0.1.5                                              │
+│ Run "C:\\ccu\\bin\\ccu-manager.exe" --upgrade --target 0.1.5 --auto-start to update. │
+│                                                                                      │
+│ See full release notes:                                                              │
+│ https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.5                         │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
