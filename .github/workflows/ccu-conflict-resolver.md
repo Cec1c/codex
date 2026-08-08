@@ -16,11 +16,16 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+github-app:
+  client-id: ${{ vars.MIRROR_MAIDEN_APP_CLIENT_ID }}
+  private-key: ${{ secrets.MIRROR_MAIDEN_APP_PRIVATE_KEY }}
+  owner: ${{ github.repository_owner }}
+  repositories: [codex]
 engine:
   id: codex
   args:
     - "-c"
-    - 'model_reasoning_effort="max"'
+    - 'model_reasoning_effort="high"'
   env:
     OPENAI_BASE_URL: ${{ vars.CCU_AGENT_BASE_URL }}
     OPENAI_API_KEY: ${{ secrets.CCU_AGENT_API_KEY }}

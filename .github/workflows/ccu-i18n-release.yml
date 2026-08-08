@@ -11,8 +11,7 @@ on:
         type: string
       revision:
         description: CCU revision for this upstream release
-        required: true
-        default: "1"
+        required: false
         type: string
       patch_ref:
         description: Fork branch containing the CCU i18n commits
@@ -47,18 +46,32 @@ jobs:
       release_branch: ${{ steps.prepare.outputs.release_branch }}
       fork_commit: ${{ steps.prepare.outputs.fork_commit }}
     steps:
+      - name: Generate GitHub App token
+        id: mirror-maiden-app-token
+        if: ${{ vars.MIRROR_MAIDEN_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.MIRROR_MAIDEN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.MIRROR_MAIDEN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: write
+          permission-contents: write
+          permission-issues: write
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           persist-credentials: true
+          token: ${{ steps.mirror-maiden-app-token.outputs.token || github.token }}
 
       - name: Prepare upstream-aligned release branch
         id: prepare
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.mirror-maiden-app-token.outputs.token || github.token }}
           REQUESTED_TAG: ${{ inputs.upstream_tag }}
-          REQUESTED_REVISION: ${{ inputs.revision || '1' }}
+          REQUESTED_REVISION: ${{ inputs.revision }}
           PATCH_REF: ${{ inputs.patch_ref || github.event.repository.default_branch }}
           PREPARED_REF: ${{ inputs.prepared_ref }}
         run: |
@@ -74,6 +87,21 @@ jobs:
           }
           upstream_version="${BASH_REMATCH[1]}"
           revision="$REQUESTED_REVISION"
+          if [[ -z "$revision" ]]; then
+            revision="$(
+              gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName |
+                jq -r --arg prefix "ccu-rust-v${upstream_version}-r" '
+                  [
+                    .[].tagName
+                    | select(startswith($prefix))
+                    | ltrimstr($prefix)
+                    | select(test("^[1-9][0-9]*$"))
+                    | tonumber
+                  ]
+                  | max // 1
+                '
+            )"
+          fi
           [[ "$revision" =~ ^[1-9][0-9]*$ ]] || {
             echo "Revision must be a positive integer" >&2
             exit 1
@@ -420,6 +448,19 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - name: Generate GitHub App token
+        id: mirror-maiden-app-token
+        if: ${{ vars.MIRROR_MAIDEN_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.MIRROR_MAIDEN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.MIRROR_MAIDEN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ccu-i18n-release-${{ needs.prepare.outputs.display_version }}
@@ -428,7 +469,7 @@ jobs:
       - name: Publish fork release
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.mirror-maiden-app-token.outputs.token || github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
           DISPLAY_VERSION: ${{ needs.prepare.outputs.display_version }}
           UPSTREAM_TAG: ${{ needs.prepare.outputs.upstream_tag }}
