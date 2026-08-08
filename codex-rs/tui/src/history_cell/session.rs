@@ -415,14 +415,16 @@ impl HistoryCell for SessionHeaderHistoryCell {
             "to change".to_string()
         });
         let yolo_mode = localizer.text("session-card-yolo-mode", None, || "YOLO mode".to_string());
-        let label_width = [
+        let mut label_width = [
             UnicodeWidthStr::width(model_label.as_str()),
             UnicodeWidthStr::width(dir_label.as_str()),
-            UnicodeWidthStr::width(permissions_label.as_str()),
         ]
         .into_iter()
         .max()
         .unwrap_or(0);
+        if self.yolo_mode {
+            label_width = label_width.max(UnicodeWidthStr::width(permissions_label.as_str()));
+        }
         let pad_label = |label: &str| {
             let padding = label_width.saturating_sub(UnicodeWidthStr::width(label));
             format!("{label}{}", " ".repeat(padding))
