@@ -25,6 +25,9 @@ param(
     [string]$BinaryPath,
 
     [Parameter(Mandatory)]
+    [string]$CodeModeHostBinaryPath,
+
+    [Parameter(Mandatory)]
     [string]$OutputDirectory
 )
 
@@ -56,6 +59,9 @@ function Assert-ChildPath {
 if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
     throw "Codex binary does not exist: $BinaryPath"
 }
+if (-not (Test-Path -LiteralPath $CodeModeHostBinaryPath -PathType Leaf)) {
+    throw "Code Mode host binary does not exist: $CodeModeHostBinaryPath"
+}
 if ($UpstreamTag -ne "rust-v$UpstreamVersion") {
     throw "Upstream tag $UpstreamTag does not match version $UpstreamVersion"
 }
@@ -79,7 +85,22 @@ foreach ($path in @($assetPath, "$assetPath.sha256", $manifestPath, "$manifestPa
 }
 New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
 Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $packageRoot 'codex.exe')
+Copy-Item -LiteralPath $CodeModeHostBinaryPath -Destination (Join-Path $packageRoot 'codex-code-mode-host.exe')
 Compress-Archive -LiteralPath (Join-Path $stagingRoot 'package') -DestinationPath $assetPath -CompressionLevel Optimal
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::OpenRead($assetPath)
+try {
+    $archiveEntries = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+    foreach ($requiredEntry in @('package/bin/codex.exe', 'package/bin/codex-code-mode-host.exe')) {
+        if ($requiredEntry -notin $archiveEntries) {
+            throw "Release archive is missing required entry: $requiredEntry"
+        }
+    }
+}
+finally {
+    $archive.Dispose()
+}
 
 $assetFile = Get-Item -LiteralPath $assetPath
 $assetHash = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
