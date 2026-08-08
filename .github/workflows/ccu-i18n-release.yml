@@ -363,12 +363,14 @@ jobs:
           cargo test -p codex-tui session_header --locked
           cargo check -p codex-cli --locked
 
-      - name: Build Windows x64 Codex
+      - name: Build Windows x64 Codex and Code Mode host
         working-directory: codex-rs
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --target x86_64-pc-windows-msvc --release --locked --bin codex
+          cargo build --target x86_64-pc-windows-msvc --release --locked \
+            --bin codex \
+            --bin codex-code-mode-host
 
       - name: Verify fork version and package release
         shell: pwsh
@@ -381,6 +383,7 @@ jobs:
           DISPLAY_VERSION: ${{ needs.prepare.outputs.display_version }}
         run: |
           $binary = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc\release\codex.exe'
+          $codeModeHostBinary = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc\release\codex-code-mode-host.exe'
           $version = (& $binary --version | Out-String).Trim()
           if ($version -notmatch [regex]::Escape($env:DISPLAY_VERSION)) {
             throw "codex --version returned '$version', expected $env:DISPLAY_VERSION"
@@ -393,6 +396,7 @@ jobs:
             -Revision ([int]$env:REVISION) `
             -DisplayVersion $env:DISPLAY_VERSION `
             -BinaryPath $binary `
+            -CodeModeHostBinaryPath $codeModeHostBinary `
             -OutputDirectory (Join-Path $env:RUNNER_TEMP 'ccu-release')
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
