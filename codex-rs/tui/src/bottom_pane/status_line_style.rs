@@ -153,12 +153,15 @@ where
         }
         let style = if use_theme_colors {
             let accent = StatusLineAccent::for_item(item);
-            soften_status_line_style(
-                ccu_theme
-                    .and_then(|theme| theme.status_style(accent.ccu_role()))
-                    .or_else(|| theme_style_for_accent(accent))
-                    .unwrap_or_else(|| accent.fallback_style()),
-            )
+            let style = ccu_theme
+                .and_then(|theme| theme.status_style(accent.ccu_role()))
+                .or_else(|| theme_style_for_accent(accent))
+                .unwrap_or_else(|| accent.fallback_style());
+            if ccu_theme.is_none_or(crate::ccu_theme::CcuTheme::soften_status_line_colors) {
+                soften_status_line_style(style)
+            } else {
+                style
+            }
         } else {
             Style::default().dim()
         };
