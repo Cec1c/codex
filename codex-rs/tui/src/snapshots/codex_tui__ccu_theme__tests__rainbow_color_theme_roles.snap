@@ -1,0 +1,83 @@
+---
+source: tui/src/ccu_theme.rs
+expression: first
+---
+CcuTheme {
+    status_line: StatusLineTheme {
+        separator: " | ",
+        progress_width: 10,
+        filled: "#",
+        empty: "-",
+        model_emojis: [
+            "A",
+            "B",
+        ],
+        palette: [
+            "#F5E0DC",
+            "#F2CDCD",
+            "#F5C2E7",
+            "#FAB387",
+            "#F9E2AF",
+            "#A6E3A1",
+        ],
+        randomize_palette: false,
+        soften_colors: false,
+        model_reasoning_style: Spaced,
+        colors: StatusLineColors {
+            model: "#F5E0DC",
+            usage: "#F5C2E7",
+            progress: "#A6E3A1",
+            time: "#F9E2AF",
+            quota: "#FAB387",
+            separator: "#CBA6F7",
+        },
+    },
+    welcome: WelcomeTheme {
+        title: "#89DCEB",
+        version: "#F5E0DC",
+        label: "#89DCEB",
+        model: "#F2CDCD",
+        path: "#A6E3A1",
+        permissions: "#FAB387",
+        border: Some(
+            "#89DCEB",
+        ),
+        command: Some(
+            "#89DCEB",
+        ),
+        badge: Some(
+            "#F5C2E7",
+        ),
+    },
+    status_card: Some(
+        StatusCardTheme {
+            border: "#89DCEB",
+            title: "#89DCEB",
+            version: "#F5E0DC",
+            label: "#89DCEB",
+            model: "#F2CDCD",
+            path: "#A6E3A1",
+            permissions: "#FAB387",
+            usage: "#89DCEB",
+            progress: "#A6E3A1",
+            percent: "#74C7EC",
+            limits: "#F9E2AF",
+            link: "#89DCEB",
+            value: "#CDD6F4",
+        },
+    ),
+    dialog: Some(
+        DialogTheme {
+            selection: "#89DCEB",
+            background: None,
+        },
+    ),
+    composer: Some(
+        SurfaceTheme {
+            background: None,
+        },
+    ),
+    model_emoji: Some(
+        "B",
+    ),
+}
