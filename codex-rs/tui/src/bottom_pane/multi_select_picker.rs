@@ -71,7 +71,7 @@ use crate::render::Insets;
 use crate::render::RectExt;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
+use crate::style::menu_surface_style;
 use crate::text_formatting::truncate_text;
 
 /// Maximum display length for item names before truncation.
@@ -613,7 +613,7 @@ impl Renderable for MultiSelectPicker {
             Layout::vertical([Constraint::Fill(1), Constraint::Length(footer_height)]).areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(menu_surface_style())
             .render(content_area, buf);
 
         let header_height = self
