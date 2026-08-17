@@ -14,7 +14,8 @@ pub(crate) fn card_inner_width(width: u16, max_inner_width: usize) -> Option<usi
 
 /// Render `lines` inside a border sized to the widest span in the content.
 pub(crate) fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
-    with_border_internal(lines, /*forced_inner_width*/ None)
+    let border_style = crate::ccu_theme::active().and_then(|theme| theme.welcome_style("border"));
+    with_border_internal(lines, /*forced_inner_width*/ None, border_style)
 }
 
 /// Render `lines` inside a border whose inner width is at least `inner_width`.
@@ -26,12 +27,21 @@ pub(crate) fn with_border_with_inner_width(
     lines: Vec<Line<'static>>,
     inner_width: usize,
 ) -> Vec<Line<'static>> {
-    with_border_internal(lines, Some(inner_width))
+    with_border_internal(lines, Some(inner_width), /*border_style*/ None)
+}
+
+pub(crate) fn with_border_with_inner_width_and_style(
+    lines: Vec<Line<'static>>,
+    inner_width: usize,
+    border_style: Option<Style>,
+) -> Vec<Line<'static>> {
+    with_border_internal(lines, Some(inner_width), border_style)
 }
 
 fn with_border_internal(
     lines: Vec<Line<'static>>,
     forced_inner_width: Option<usize>,
+    border_style: Option<Style>,
 ) -> Vec<Line<'static>> {
     let max_line_width = lines
         .iter()
@@ -48,7 +58,14 @@ fn with_border_internal(
 
     let mut out = Vec::with_capacity(lines.len() + 2);
     let border_inner_width = content_width + 2;
-    out.push(vec![format!("╭{}╮", "─".repeat(border_inner_width)).dim()].into());
+    let border_style = border_style.unwrap_or_else(|| Style::default().dim());
+    out.push(
+        vec![Span::styled(
+            format!("╭{}╮", "─".repeat(border_inner_width)),
+            border_style,
+        )]
+        .into(),
+    );
 
     for line in lines.into_iter() {
         let used_width: usize = line
@@ -57,16 +74,22 @@ fn with_border_internal(
             .sum();
         let span_count = line.spans.len();
         let mut spans: Vec<Span<'static>> = Vec::with_capacity(span_count + 4);
-        spans.push(Span::from("│ ").dim());
+        spans.push(Span::styled("│ ", border_style));
         spans.extend(line);
         if used_width < content_width {
             spans.push(Span::from(" ".repeat(content_width - used_width)).dim());
         }
-        spans.push(Span::from(" │").dim());
+        spans.push(Span::styled(" │", border_style));
         out.push(Line::from(spans));
     }
 
-    out.push(vec![format!("╰{}╯", "─".repeat(border_inner_width)).dim()].into());
+    out.push(
+        vec![Span::styled(
+            format!("╰{}╯", "─".repeat(border_inner_width)),
+            border_style,
+        )]
+        .into(),
+    );
 
     out
 }
@@ -470,10 +493,21 @@ impl HistoryCell for SessionHeaderHistoryCell {
             }
             if self.show_fast_status {
                 spans.push("   ".into());
-                spans.push(Span::styled("fast", self.model_style.magenta()));
+                spans.push(Span::styled(
+                    "fast",
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("badge"))
+                        .unwrap_or_else(|| self.model_style.magenta())
+                        .bold(),
+                ));
             }
             spans.push("   ".dim());
-            spans.push(CHANGE_MODEL_HINT_COMMAND.cyan());
+            spans.push(Span::styled(
+                CHANGE_MODEL_HINT_COMMAND,
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("command"))
+                    .unwrap_or_else(|| Style::default().cyan()),
+            ));
             spans.push(" ".dim());
             spans.push(change_model_hint.dim());
             spans
