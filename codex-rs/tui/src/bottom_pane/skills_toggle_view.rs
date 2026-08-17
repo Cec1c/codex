@@ -24,7 +24,7 @@ use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
 use crate::skills_helpers::match_skill;
-use crate::style::user_message_style;
+use crate::style::menu_surface_style;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -331,7 +331,7 @@ impl Renderable for SkillsToggleView {
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(menu_surface_style())
             .render(content_area, buf);
 
         let header_height = self
