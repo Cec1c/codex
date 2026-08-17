@@ -7,8 +7,8 @@ use crate::terminal_palette::default_fg;
 use crate::terminal_palette::rgb_color;
 use crate::terminal_palette::stdout_color_level;
 use ratatui::style::Color;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
-use ratatui::style::Stylize;
 
 const LIGHT_BG_ACCENT_RGB: (u8, u8, u8) = (0, 95, 135);
 // Decorative table rules should remain visible without competing with cell content.
@@ -43,7 +43,10 @@ pub(crate) fn table_separator_style() -> Style {
 pub(crate) fn accent_style() -> Style {
     crate::ccu_theme::active()
         .and_then(crate::ccu_theme::CcuTheme::dialog_selection_style)
-        .map_or_else(|| accent_style_for(default_bg()), Stylize::bold)
+        .map_or_else(
+            || accent_style_for(default_bg()),
+            |style| style.add_modifier(Modifier::BOLD),
+        )
 }
 
 /// Returns the style for a user-authored message using the provided terminal background.
