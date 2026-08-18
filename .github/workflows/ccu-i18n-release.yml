@@ -31,6 +31,10 @@ on:
         required: true
         default: "1"
         type: string
+      artifact_run_id:
+        description: Optional successful build run whose artifacts should be reused for publish recovery
+        required: false
+        type: string
 
 concurrency:
   group: ccu-i18n-release
@@ -379,7 +383,7 @@ jobs:
 
   build:
     needs: prepare
-    if: needs.prepare.outputs.should_release == 'true'
+    if: needs.prepare.outputs.should_release == 'true' && inputs.artifact_run_id == ''
     name: Build ${{ matrix.runtime_id }}
     strategy:
       fail-fast: false
@@ -507,8 +511,13 @@ jobs:
     needs:
       - prepare
       - build
+    if: >-
+      always() &&
+      needs.prepare.outputs.should_release == 'true' &&
+      (needs.build.result == 'success' || inputs.artifact_run_id != '')
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: write
       issues: write
       pull-requests: write
@@ -531,6 +540,8 @@ jobs:
           pattern: ccu-i18n-release-${{ needs.prepare.outputs.display_version }}-*
           path: release-assets
           merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
 
       - name: Verify complete platform asset set
         shell: bash
@@ -558,7 +569,7 @@ jobs:
       - name: Publish fork release
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.mirror-maiden-app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
           DISPLAY_VERSION: ${{ needs.prepare.outputs.display_version }}
           UPSTREAM_TAG: ${{ needs.prepare.outputs.upstream_tag }}
