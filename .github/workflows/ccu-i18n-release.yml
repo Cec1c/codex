@@ -21,6 +21,16 @@ on:
         description: Optional pre-resolved release branch for a known upstream conflict
         required: false
         type: string
+      alpha:
+        description: Publish as an Alpha prerelease without changing the stable/latest channel
+        required: true
+        default: false
+        type: boolean
+      alpha_sequence:
+        description: Positive Alpha sequence number used when alpha is enabled
+        required: true
+        default: "1"
+        type: string
 
 concurrency:
   group: ccu-i18n-release
@@ -45,6 +55,7 @@ jobs:
       release_tag: ${{ steps.prepare.outputs.release_tag }}
       release_branch: ${{ steps.prepare.outputs.release_branch }}
       fork_commit: ${{ steps.prepare.outputs.fork_commit }}
+      alpha: ${{ steps.prepare.outputs.alpha }}
     steps:
       - name: Generate GitHub App token
         id: mirror-maiden-app-token
@@ -74,6 +85,8 @@ jobs:
           REQUESTED_REVISION: ${{ inputs.revision }}
           PATCH_REF: ${{ inputs.patch_ref || github.event.repository.default_branch }}
           PREPARED_REF: ${{ inputs.prepared_ref }}
+          REQUESTED_ALPHA: ${{ inputs.alpha && 'true' || 'false' }}
+          REQUESTED_ALPHA_SEQUENCE: ${{ inputs.alpha_sequence || '1' }}
         run: |
           set -euo pipefail
 
@@ -111,10 +124,25 @@ jobs:
             exit 1
           }
 
+          alpha="$REQUESTED_ALPHA"
+          [[ "$alpha" == "true" || "$alpha" == "false" ]] || {
+            echo "Alpha must be true or false" >&2
+            exit 1
+          }
+          alpha_sequence="$REQUESTED_ALPHA_SEQUENCE"
+          [[ "$alpha_sequence" =~ ^[1-9][0-9]*$ ]] || {
+            echo "Alpha sequence must be a positive integer" >&2
+            exit 1
+          }
+          alpha_suffix=""
+          if [[ "$alpha" == "true" ]]; then
+            alpha_suffix="-alpha.${alpha_sequence}"
+          fi
+
           display_version="${upstream_version}-ccu.i18n.${revision}"
-          release_tag="ccu-rust-v${upstream_version}-r${revision}"
-          release_branch="ccu/release/${upstream_version}-r${revision}"
-          agent_base_branch="ccu/agent-base/${upstream_version}-r${revision}"
+          release_tag="ccu-rust-v${upstream_version}-r${revision}${alpha_suffix}"
+          release_branch="ccu/release/${upstream_version}-r${revision}${alpha_suffix}"
+          agent_base_branch="ccu/agent-base/${upstream_version}-r${revision}${alpha_suffix}"
 
           if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $release_tag already exists; nothing to do."
@@ -167,6 +195,7 @@ jobs:
               echo "release_tag=$release_tag"
               echo "release_branch=$release_branch"
               echo "fork_commit=$prepared_commit"
+              echo "alpha=$alpha"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -345,12 +374,43 @@ jobs:
             echo "release_tag=$release_tag"
             echo "release_branch=$release_branch"
             echo "fork_commit=$fork_commit"
+            echo "alpha=$alpha"
           } >> "$GITHUB_OUTPUT"
 
-  build-windows:
+  build:
     needs: prepare
     if: needs.prepare.outputs.should_release == 'true'
-    runs-on: windows-latest
+    name: Build ${{ matrix.runtime_id }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime_id: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: codex.exe
+            code_mode_host: codex-code-mode-host.exe
+          - runtime_id: linux-x64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            binary: codex
+            code_mode_host: codex-code-mode-host
+          - runtime_id: linux-arm64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: codex
+            code_mode_host: codex-code-mode-host
+          - runtime_id: macos-x64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            binary: codex
+            code_mode_host: codex-code-mode-host
+          - runtime_id: macos-arm64
+            os: macos-15
+            target: aarch64-apple-darwin
+            binary: codex
+            code_mode_host: codex-code-mode-host
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     permissions:
       contents: read
@@ -365,25 +425,27 @@ jobs:
           persist-credentials: false
 
       - name: Configure build directory
-        shell: pwsh
+        shell: bash
         run: |
-          "CARGO_TARGET_DIR=$env:RUNNER_TEMP\cargo-target" >> $env:GITHUB_ENV
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/cargo-target" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
         with:
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
 
       - name: Configure rusty_v8 artifacts
         uses: ./.github/actions/setup-rusty-v8
         with:
-          target: x86_64-pc-windows-msvc
+          target: ${{ matrix.target }}
 
       - name: Configure MSVC environment
+        if: matrix.runtime_id == 'windows-x64'
         uses: ./.github/actions/setup-msvc-env
         with:
           target: x86_64-pc-windows-msvc
 
       - name: Verify i18n contract
+        if: matrix.runtime_id == 'windows-x64'
         working-directory: codex-rs
         shell: bash
         run: |
@@ -396,12 +458,12 @@ jobs:
           cargo test -p codex-tui session_header --locked
           cargo check -p codex-cli --locked
 
-      - name: Build Windows x64 Codex and Code Mode host
+      - name: Build platform Codex and Code Mode host
         working-directory: codex-rs
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --target x86_64-pc-windows-msvc --release --locked \
+          cargo build --target "${{ matrix.target }}" --release --locked \
             --bin codex \
             --bin codex-code-mode-host
 
@@ -415,8 +477,9 @@ jobs:
           REVISION: ${{ needs.prepare.outputs.revision }}
           DISPLAY_VERSION: ${{ needs.prepare.outputs.display_version }}
         run: |
-          $binary = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc\release\codex.exe'
-          $codeModeHostBinary = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc\release\codex-code-mode-host.exe'
+          $releaseDir = Join-Path (Join-Path $env:CARGO_TARGET_DIR '${{ matrix.target }}') 'release'
+          $binary = Join-Path $releaseDir '${{ matrix.binary }}'
+          $codeModeHostBinary = Join-Path $releaseDir '${{ matrix.code_mode_host }}'
           $version = (& $binary --version | Out-String).Trim()
           if ($version -notmatch [regex]::Escape($env:DISPLAY_VERSION)) {
             throw "codex --version returned '$version', expected $env:DISPLAY_VERSION"
@@ -428,20 +491,22 @@ jobs:
             -ForkCommit $env:FORK_COMMIT `
             -Revision ([int]$env:REVISION) `
             -DisplayVersion $env:DISPLAY_VERSION `
+            -ReleaseTag '${{ needs.prepare.outputs.release_tag }}' `
+            -RuntimeId '${{ matrix.runtime_id }}' `
             -BinaryPath $binary `
             -CodeModeHostBinaryPath $codeModeHostBinary `
             -OutputDirectory (Join-Path $env:RUNNER_TEMP 'ccu-release')
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ccu-i18n-release-${{ needs.prepare.outputs.display_version }}
-          path: ${{ runner.temp }}\ccu-release\*
+          name: ccu-i18n-release-${{ needs.prepare.outputs.display_version }}-${{ matrix.runtime_id }}
+          path: ${{ runner.temp }}/ccu-release/*
           if-no-files-found: error
 
   publish:
     needs:
       - prepare
-      - build-windows
+      - build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -463,8 +528,32 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: ccu-i18n-release-${{ needs.prepare.outputs.display_version }}
+          pattern: ccu-i18n-release-${{ needs.prepare.outputs.display_version }}-*
           path: release-assets
+          merge-multiple: true
+
+      - name: Verify complete platform asset set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          expected_manifests=(
+            ccu-fork-manifest.json
+            ccu-fork-manifest-linux-x64.json
+            ccu-fork-manifest-linux-arm64.json
+            ccu-fork-manifest-macos-x64.json
+            ccu-fork-manifest-macos-arm64.json
+          )
+          for manifest in "${expected_manifests[@]}"; do
+            test -f "$manifest"
+            test -f "$manifest.sha256"
+            sha256sum -c "$manifest.sha256"
+            asset="$(jq -r .asset.name "$manifest")"
+            test -f "$asset"
+            test -f "$asset.sha256"
+            sha256sum -c "$asset.sha256"
+          done
+          test "$(find . -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 5
 
       - name: Publish fork release
         shell: bash
@@ -476,15 +565,23 @@ jobs:
           UPSTREAM_COMMIT: ${{ needs.prepare.outputs.upstream_commit }}
           FORK_COMMIT: ${{ needs.prepare.outputs.fork_commit }}
           RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
+          ALPHA: ${{ needs.prepare.outputs.alpha }}
         run: |
           set -euo pipefail
+          release_kind="Alpha test build"
+          release_flags=(--prerelease)
+          if [[ "$ALPHA" != "true" ]]; then
+            release_kind="Stable build"
+            release_flags=(--latest)
+          fi
           cat > release-notes.md <<EOF
           CCU i18n 构建 ${DISPLAY_VERSION}
 
+          - 发布级别 / Release tier: ${release_kind}
           - 上游版本 / Upstream release: ${UPSTREAM_TAG}
           - 上游提交 / Upstream commit: ${UPSTREAM_COMMIT}
           - fork 提交 / Fork commit: ${FORK_COMMIT}
-          - 平台 / Platform: Windows x64
+          - 平台 / Platforms: Windows x64, Linux x64/ARM64, macOS Intel/Apple Silicon
           - 语言包和主题包由 Codex CLI Ultra 独立分发，二进制内始终保留英文逐条回退。
           EOF
           gh release create "$RELEASE_TAG" release-assets/* \
@@ -492,7 +589,7 @@ jobs:
             --target "$FORK_COMMIT" \
             --title "$DISPLAY_VERSION" \
             --notes-file release-notes.md \
-            --latest
+            "${release_flags[@]}"
 
           conflict_title="[CCU sync] $RELEASE_TAG needs manual rebase"
           issue_number="$(
