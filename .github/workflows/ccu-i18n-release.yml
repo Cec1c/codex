@@ -37,7 +37,7 @@ on:
         type: string
 
 concurrency:
-  group: ccu-i18n-release
+  group: ccu-i18n-release-${{ inputs.alpha && 'alpha' || 'stable' }}
   cancel-in-progress: false
 
 permissions: {}
