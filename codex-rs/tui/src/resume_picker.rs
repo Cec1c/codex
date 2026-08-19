@@ -2172,19 +2172,19 @@ fn toolbar_line(state: &PickerState, compact: bool) -> Line<'static> {
                 SessionStatus::Archived => "Archived",
             };
             spans.push(toolbar_value(
-                active_status,
+                active_status.to_string(),
                 /*active*/ true,
                 status_focused,
             ));
         } else {
             spans.push("Status: ".dim());
             spans.push(toolbar_value(
-                "Active",
+                "Active".to_string(),
                 state.status == SessionStatus::Active,
                 status_focused,
             ));
             spans.push(toolbar_value(
-                "Archived",
+                "Archived".to_string(),
                 state.status == SessionStatus::Archived,
                 status_focused,
             ));
@@ -2416,7 +2416,7 @@ fn footer_hint_lines(state: &PickerState, width: u16) -> Vec<Line<'static>> {
     }
 
     let action_label = if state.status == SessionStatus::Archived {
-        "restore"
+        "restore".to_string()
     } else {
         state.action.action_label()
     };
@@ -2458,7 +2458,7 @@ fn footer_hint_lines(state: &PickerState, width: u16) -> Vec<Line<'static>> {
         first_row_hints.push(PickerFooterHint {
             key: accept.display_label(),
             wide_label: action_label.clone(),
-            compact_label: action_label.clone(),
+            compact_label: action_label,
             priority: 0,
         });
     }

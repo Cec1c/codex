@@ -1,6 +1,7 @@
 //! Construction and initial wiring for `ChatWidget`.
 
 use super::*;
+use rand::Rng;
 
 impl ChatWidget {
     pub(crate) fn new_with_app_event(common: ChatWidgetInit) -> Self {
@@ -36,16 +37,24 @@ impl ChatWidget {
         let mut config = config;
         config.model = model.clone();
         let prevent_idle_sleep = config.features.enabled(Feature::PreventIdleSleep);
-        let mut rng = rand::rng();
-        let (placeholder_key, placeholder_english) =
-            PLACEHOLDERS[rng.random_range(0..PLACEHOLDERS.len())];
-        let placeholder =
-            crate::i18n::global().text(placeholder_key, None, || placeholder_english.to_string());
-        let (side_placeholder_key, side_placeholder_english) =
-            SIDE_PLACEHOLDERS[rng.random_range(0..SIDE_PLACEHOLDERS.len())];
-        let side_placeholder = crate::i18n::global().text(side_placeholder_key, None, || {
-            side_placeholder_english.to_string()
-        });
+        let (placeholder, side_placeholder) = if cfg!(test) {
+            (
+                "Ask Codex to do anything".to_string(),
+                "Ask a follow-up question".to_string(),
+            )
+        } else {
+            let mut rng = rand::rng();
+            let (placeholder_key, placeholder_english) =
+                PLACEHOLDERS[rng.random_range(0..PLACEHOLDERS.len())];
+            let placeholder = crate::i18n::global()
+                .text(placeholder_key, None, || placeholder_english.to_string());
+            let (side_placeholder_key, side_placeholder_english) =
+                SIDE_PLACEHOLDERS[rng.random_range(0..SIDE_PLACEHOLDERS.len())];
+            let side_placeholder = crate::i18n::global().text(side_placeholder_key, None, || {
+                side_placeholder_english.to_string()
+            });
+            (placeholder, side_placeholder)
+        };
 
         let model_override = model.as_deref();
         let model_for_header = model

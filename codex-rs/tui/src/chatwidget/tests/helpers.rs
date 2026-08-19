@@ -204,6 +204,14 @@ pub(super) async fn make_chatwidget_manual_with_auth(
         session_telemetry,
     };
     let mut widget = ChatWidget::new_with_op_target(common, super::CodexOpTarget::Direct(op_tx));
+    let status_line_cwd = widget
+        .current_cwd
+        .clone()
+        .unwrap_or_else(|| widget.config.cwd.to_path_buf());
+    widget.status_line_project_root_name_cache = Some(CachedProjectRootName {
+        cwd: status_line_cwd,
+        root_name: None,
+    });
     widget.transcript.active_cell = None;
     widget.transcript.active_cell_revision = 0;
     widget.set_model(&resolved_model);
