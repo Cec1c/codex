@@ -205,6 +205,10 @@ impl SlashCommand {
                 "tui.slash-command.description.copy",
                 "slash-copy-description",
             ),
+            SlashCommand::Export => (
+                "tui.slash-command.description.export",
+                "slash-export-description",
+            ),
             SlashCommand::Raw => ("tui.slash-command.description.raw", "slash-raw-description"),
             SlashCommand::Diff => (
                 "tui.slash-command.description.diff",

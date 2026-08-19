@@ -13,6 +13,7 @@ use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use crate::update_action::UpdateAction;
 use crate::updates;
+use crate::version::CODEX_CLI_VERSION;
 use color_eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -113,7 +114,7 @@ impl UpdatePromptScreen {
         update_action: UpdateAction,
     ) -> Self {
         let current_version = update_action.ccu_prompt_details().map_or_else(
-            || env!("CARGO_PKG_VERSION").to_string(),
+            || CODEX_CLI_VERSION.to_string(),
             |(current, _)| current.to_string(),
         );
         Self {
