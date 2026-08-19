@@ -575,7 +575,7 @@ jobs:
       - name: Publish fork release
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.mirror-maiden-app-token.outputs.token || github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
           DISPLAY_VERSION: ${{ needs.prepare.outputs.display_version }}
           UPSTREAM_TAG: ${{ needs.prepare.outputs.upstream_tag }}
