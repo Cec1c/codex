@@ -192,7 +192,7 @@ fn self_check_includes_catalog_messages_and_missing_key_fallback() {
     );
     assert_eq!(
         payload["messages"].as_object().map(serde_json::Map::len),
-        Some(134)
+        Some(136)
     );
     assert_eq!(payload["messages"]["i18n.missing-key"], "English fallback");
 }

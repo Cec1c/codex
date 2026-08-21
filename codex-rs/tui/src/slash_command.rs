@@ -181,10 +181,7 @@ impl SlashCommand {
                 "slash-resume-description",
             ),
             SlashCommand::Cd => ("tui.slash-command.description.cd", "slash-cd-description"),
-            SlashCommand::Pwd => (
-                "tui.slash-command.description.pwd",
-                "slash-pwd-description",
-            ),
+            SlashCommand::Pwd => ("tui.slash-command.description.pwd", "slash-pwd-description"),
             SlashCommand::Archive => (
                 "tui.slash-command.description.archive",
                 "slash-archive-description",
