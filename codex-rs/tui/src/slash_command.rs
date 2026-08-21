@@ -180,6 +180,11 @@ impl SlashCommand {
                 "tui.slash-command.description.resume",
                 "slash-resume-description",
             ),
+            SlashCommand::Cd => ("tui.slash-command.description.cd", "slash-cd-description"),
+            SlashCommand::Pwd => (
+                "tui.slash-command.description.pwd",
+                "slash-pwd-description",
+            ),
             SlashCommand::Archive => (
                 "tui.slash-command.description.archive",
                 "slash-archive-description",
@@ -288,7 +293,7 @@ impl SlashCommand {
                 "tui.slash-command.description.goal",
                 "slash-goal-description",
             ),
-            SlashCommand::Agent | SlashCommand::MultiAgents => (
+            SlashCommand::Agents | SlashCommand::MultiAgents => (
                 "tui.slash-command.description.agent",
                 "slash-agent-description",
             ),
