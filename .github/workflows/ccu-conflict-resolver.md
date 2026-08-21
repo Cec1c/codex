@@ -25,7 +25,7 @@ engine:
   id: codex
   args:
     - "-c"
-    - 'model_reasoning_effort="high"'
+    - 'model_reasoning_effort="medium"'
   env:
     OPENAI_BASE_URL: ${{ vars.CCU_AGENT_BASE_URL }}
     OPENAI_API_KEY: ${{ secrets.CCU_AGENT_API_KEY }}
