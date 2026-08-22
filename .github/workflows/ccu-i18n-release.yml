@@ -35,11 +35,6 @@ on:
         required: true
         default: "1"
         type: string
-      artifact_run_id:
-        description: Optional successful build run whose artifacts should be reused for publish recovery
-        required: false
-        type: string
-
 concurrency:
   group: ccu-i18n-release-${{ inputs.alpha && 'alpha' || 'stable' }}
   cancel-in-progress: false
