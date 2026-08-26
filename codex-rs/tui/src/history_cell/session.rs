@@ -4,6 +4,7 @@ use super::*;
 use crate::line_truncation::line_width;
 use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::width::display_width;
+use unicode_width::UnicodeWidthStr;
 
 pub(crate) const SESSION_HEADER_MAX_INNER_WIDTH: usize = 56; // Just an eyeballed value
 
@@ -17,7 +18,8 @@ pub(crate) fn card_inner_width(width: u16, max_inner_width: usize) -> Option<usi
 
 /// Render `lines` inside a border sized to the widest span in the content.
 pub(crate) fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
-    with_border_internal(lines, /*forced_inner_width*/ None)
+    let border_style = crate::ccu_theme::active().and_then(|theme| theme.welcome_style("border"));
+    with_border_internal(lines, /*forced_inner_width*/ None, border_style)
 }
 
 /// Render `lines` inside a border whose inner width is at least `inner_width`.
@@ -29,12 +31,21 @@ pub(crate) fn with_border_with_inner_width(
     lines: Vec<Line<'static>>,
     inner_width: usize,
 ) -> Vec<Line<'static>> {
-    with_border_internal(lines, Some(inner_width))
+    with_border_internal(lines, Some(inner_width), /*border_style*/ None)
+}
+
+pub(crate) fn with_border_with_inner_width_and_style(
+    lines: Vec<Line<'static>>,
+    inner_width: usize,
+    border_style: Option<Style>,
+) -> Vec<Line<'static>> {
+    with_border_internal(lines, Some(inner_width), border_style)
 }
 
 fn with_border_internal(
     lines: Vec<Line<'static>>,
     forced_inner_width: Option<usize>,
+    border_style: Option<Style>,
 ) -> Vec<Line<'static>> {
     let max_line_width = lines.iter().map(line_width).max().unwrap_or(0);
     let content_width = forced_inner_width
@@ -43,22 +54,35 @@ fn with_border_internal(
 
     let mut out = Vec::with_capacity(lines.len() + 2);
     let border_inner_width = content_width + 2;
-    out.push(vec![format!("╭{}╮", "─".repeat(border_inner_width)).dim()].into());
+    let border_style = border_style.unwrap_or_else(|| Style::default().dim());
+    out.push(
+        vec![Span::styled(
+            format!("╭{}╮", "─".repeat(border_inner_width)),
+            border_style,
+        )]
+        .into(),
+    );
 
     for line in lines.into_iter() {
         let used_width = line_width(&line);
         let span_count = line.spans.len();
         let mut spans: Vec<Span<'static>> = Vec::with_capacity(span_count + 4);
-        spans.push(Span::from("│ ").dim());
+        spans.push(Span::styled("│ ", border_style));
         spans.extend(line);
         if used_width < content_width {
             spans.push(Span::from(" ".repeat(content_width - used_width)).dim());
         }
-        spans.push(Span::from(" │").dim());
+        spans.push(Span::styled(" │", border_style));
         out.push(Line::from(spans));
     }
 
-    out.push(vec![format!("╰{}╯", "─".repeat(border_inner_width)).dim()].into());
+    out.push(
+        vec![Span::styled(
+            format!("╰{}╯", "─".repeat(border_inner_width)),
+            border_style,
+        )]
+        .into(),
+    );
 
     out
 }
@@ -86,8 +110,9 @@ impl HistoryCell for TooltipHistoryCell {
             .saturating_sub(indent_width)
             .max(1);
         let mut lines: Vec<Line<'static>> = Vec::new();
+        let label = crate::i18n::global().text("tooltip-label", None, || "Tip:".to_string());
         append_markdown(
-            &format!("**Tip:** {}", self.tip),
+            &format!("**{label}** {}", self.tip),
             Some(wrap_width),
             Some(self.cwd.as_path()),
             &mut lines,
@@ -97,7 +122,8 @@ impl HistoryCell for TooltipHistoryCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        vec![Line::from(format!("Tip: {}", self.tip))]
+        let label = crate::i18n::global().text("tooltip-label", None, || "Tip:".to_string());
+        vec![Line::from(format!("{label} {}", self.tip))]
     }
 }
 
@@ -146,36 +172,72 @@ pub(crate) fn new_session_info(
     let mut parts: Vec<Box<dyn HistoryCell>> = vec![Box::new(header)];
 
     if is_first_event {
+        let localizer = crate::i18n::global();
         // Help lines below the header (new copy and list)
         let help_lines: Vec<Line<'static>> = vec![
-            "  To get started, describe a task or try one of these commands:"
-                .dim()
-                .into(),
+            format!(
+                "  {}",
+                localizer.text("session-help-intro", None, || {
+                    "To get started, describe a task or try one of these commands:".to_string()
+                })
+            )
+            .dim()
+            .into(),
             Line::from(""),
             Line::from(vec![
                 "  ".into(),
                 "/init".into(),
-                " - create an AGENTS.md file with instructions for Codex".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-init", None, || {
+                        "create an AGENTS.md file with instructions for Codex".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/status".into(),
-                " - show current session configuration".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-status", None, || {
+                        "show current session configuration".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/permissions".into(),
-                " - choose what Codex is allowed to do".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-permissions", None, || {
+                        "choose what Codex is allowed to do".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/model".into(),
-                " - choose what model and reasoning effort to use".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-model", None, || {
+                        "choose what model and reasoning effort to use".to_string()
+                    })
+                )
+                .dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
                 "/review".into(),
-                " - review any changes and find issues".dim(),
+                format!(
+                    " - {}",
+                    localizer.text("session-help-review", None, || {
+                        "review any changes and find issues".to_string()
+                    })
+                )
+                .dim(),
             ]),
         ];
 
@@ -189,10 +251,31 @@ pub(crate) fn new_session_info(
             parts.push(Box::new(tooltips));
         }
         if requested_model != session.model.as_str() {
+            let localizer = crate::i18n::global();
             let lines = vec![
-                "model changed:".magenta().bold().into(),
-                format!("requested: {requested_model}").into(),
-                format!("used: {}", session.model).into(),
+                localizer
+                    .text("session-model-changed", None, || {
+                        "model changed:".to_string()
+                    })
+                    .magenta()
+                    .bold()
+                    .into(),
+                localizer
+                    .text_with_string_arg(
+                        "session-model-requested",
+                        "model",
+                        requested_model,
+                        || format!("requested: {requested_model}"),
+                    )
+                    .into(),
+                localizer
+                    .text_with_string_arg(
+                        "session-model-used",
+                        "model",
+                        session.model.as_str(),
+                        || format!("used: {}", session.model),
+                    )
+                    .into(),
             ];
             parts.push(Box::new(PlainHistoryCell { lines }));
         }
@@ -318,54 +401,125 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let make_row = |spans: Vec<Span<'static>>| Line::from(spans);
 
         // Title line rendered inside the box: ">_ OpenAI Codex (vX)"
+        let ccu_theme = crate::ccu_theme::active();
         let title_spans: Vec<Span<'static>> = vec![
-            Span::from(">_ ").dim(),
-            Span::from("OpenAI Codex").bold(),
+            Span::styled(
+                ">_ ",
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("label"))
+                    .unwrap_or_else(|| Style::default().dim()),
+            ),
+            Span::styled(
+                "OpenAI Codex",
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("title"))
+                    .unwrap_or_default()
+                    .bold(),
+            ),
             Span::from(" ").dim(),
-            Span::from(format!("(v{})", self.version)).dim(),
+            Span::styled(
+                format!("(v{})", self.version),
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("version"))
+                    .unwrap_or_else(|| Style::default().dim()),
+            ),
         ];
 
         const CHANGE_MODEL_HINT_COMMAND: &str = "/model";
-        const CHANGE_MODEL_HINT_EXPLANATION: &str = " to change";
-        const DIR_LABEL: &str = "directory:";
-        const PERMISSIONS_LABEL: &str = "permissions:";
-        let label_width = if self.yolo_mode {
-            DIR_LABEL.len().max(PERMISSIONS_LABEL.len())
-        } else {
-            DIR_LABEL.len()
+        let localizer = crate::i18n::global();
+        let model_label = localizer.text("session-card-model-label", None, || "model:".to_string());
+        let dir_label = localizer.text("session-card-directory-label", None, || {
+            "directory:".to_string()
+        });
+        let permissions_label = localizer.text("session-card-permissions-label", None, || {
+            "permissions:".to_string()
+        });
+        let change_model_hint = localizer.text("session-card-change-model-hint", None, || {
+            "to change".to_string()
+        });
+        let yolo_mode = localizer.text("session-card-yolo-mode", None, || "YOLO mode".to_string());
+        let mut label_width = [
+            UnicodeWidthStr::width(model_label.as_str()),
+            UnicodeWidthStr::width(dir_label.as_str()),
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+        if self.yolo_mode {
+            label_width = label_width.max(UnicodeWidthStr::width(permissions_label.as_str()));
+        }
+        let pad_label = |label: &str| {
+            let padding = label_width.saturating_sub(UnicodeWidthStr::width(label));
+            format!("{label}{}", " ".repeat(padding))
         };
 
-        let model_label = format!(
-            "{model_label:<label_width$}",
-            model_label = "model:",
-            label_width = label_width
-        );
+        let model_label = pad_label(&model_label);
         let reasoning_label = self.reasoning_label();
         let model_spans: Vec<Span<'static>> = {
             let mut spans = vec![
-                Span::from(format!("{model_label} ")).dim(),
-                Span::styled(self.model.clone(), self.model_style),
+                Span::styled(
+                    format!("{model_label} "),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("label"))
+                        .unwrap_or_else(|| Style::default().dim()),
+                ),
+                Span::styled(
+                    self.model.clone(),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("model"))
+                        .unwrap_or(self.model_style),
+                ),
             ];
             if let Some(reasoning) = reasoning_label {
                 spans.push(Span::from(" "));
-                spans.push(Span::from(reasoning.to_owned()));
+                spans.push(Span::styled(
+                    reasoning.to_owned(),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("model"))
+                        .unwrap_or_default(),
+                ));
             }
             if self.show_fast_status {
                 spans.push("   ".into());
-                spans.push(Span::styled("fast", self.model_style.magenta()));
+                spans.push(Span::styled(
+                    "fast",
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("badge"))
+                        .unwrap_or_else(|| self.model_style.magenta())
+                        .bold(),
+                ));
             }
             spans.push("   ".dim());
-            spans.push(CHANGE_MODEL_HINT_COMMAND.cyan());
-            spans.push(CHANGE_MODEL_HINT_EXPLANATION.dim());
+            spans.push(Span::styled(
+                CHANGE_MODEL_HINT_COMMAND,
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("command"))
+                    .unwrap_or_else(|| Style::default().cyan()),
+            ));
+            spans.push(" ".dim());
+            spans.push(change_model_hint.dim());
             spans
         };
 
-        let dir_label = format!("{DIR_LABEL:<label_width$}");
+        let dir_label = pad_label(&dir_label);
         let dir_prefix = format!("{dir_label} ");
         let dir_prefix_width = display_width(dir_prefix.as_str());
         let dir_max_width = inner_width.saturating_sub(dir_prefix_width);
         let dir = self.format_directory(Some(dir_max_width));
-        let dir_spans = vec![Span::from(dir_prefix).dim(), Span::from(dir)];
+        let dir_spans = vec![
+            Span::styled(
+                dir_prefix,
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("label"))
+                    .unwrap_or_else(|| Style::default().dim()),
+            ),
+            Span::styled(
+                dir,
+                ccu_theme
+                    .and_then(|theme| theme.welcome_style("path"))
+                    .unwrap_or_default(),
+            ),
+        ];
 
         let mut lines = vec![
             make_row(title_spans),
@@ -375,10 +529,21 @@ impl HistoryCell for SessionHeaderHistoryCell {
         ];
 
         if self.yolo_mode {
-            let permissions_label = format!("{PERMISSIONS_LABEL:<label_width$}");
+            let permissions_label = pad_label(&permissions_label);
             lines.push(make_row(vec![
-                Span::from(format!("{permissions_label} ")).dim(),
-                "YOLO mode".magenta().bold(),
+                Span::styled(
+                    format!("{permissions_label} "),
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("label"))
+                        .unwrap_or_else(|| Style::default().dim()),
+                ),
+                Span::styled(
+                    yolo_mode,
+                    ccu_theme
+                        .and_then(|theme| theme.welcome_style("permissions"))
+                        .unwrap_or_else(|| Style::default().magenta())
+                        .bold(),
+                ),
             ]));
         }
 
@@ -390,22 +555,31 @@ impl HistoryCell for SessionHeaderHistoryCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
+        let localizer = crate::i18n::global();
+        let model_label = localizer.text("session-card-model-label", None, || "model:".to_string());
+        let dir_label = localizer.text("session-card-directory-label", None, || {
+            "directory:".to_string()
+        });
+        let permissions_label = localizer.text("session-card-permissions-label", None, || {
+            "permissions:".to_string()
+        });
+        let yolo_mode = localizer.text("session-card-yolo-mode", None, || "YOLO mode".to_string());
         let mut lines = vec![
             Line::from(format!("OpenAI Codex (v{})", self.version)),
             Line::from(format!(
-                "model: {}{}",
+                "{model_label} {}{}",
                 self.model,
                 self.reasoning_label()
                     .map(|reasoning| format!(" {reasoning}"))
                     .unwrap_or_default()
             )),
             Line::from(format!(
-                "directory: {}",
+                "{dir_label} {}",
                 self.format_directory(/*max_width*/ None)
             )),
         ];
         if self.yolo_mode {
-            lines.push(Line::from("permissions: YOLO mode"));
+            lines.push(Line::from(format!("{permissions_label} {yolo_mode}")));
         }
         lines
     }

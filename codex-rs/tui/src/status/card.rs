@@ -2,7 +2,7 @@ use crate::history_cell::CompositeHistoryCell;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::PlainHistoryCell;
 use crate::history_cell::plain_lines;
-use crate::history_cell::with_border_with_inner_width;
+use crate::history_cell::with_border_with_inner_width_and_style;
 use crate::legacy_core::config::Config;
 use crate::line_truncation::line_width;
 use crate::token_usage::TokenUsage;
@@ -55,6 +55,23 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 const CHATGPT_USAGE_URL: &str = "https://chatgpt.com/codex/settings/usage";
+
+fn status_card_style(role: &str, fallback: Style) -> Style {
+    crate::ccu_theme::active()
+        .and_then(|theme| theme.status_card_style(role))
+        .unwrap_or(fallback)
+}
+
+fn apply_status_card_role(mut spans: Vec<Span<'static>>, role: &str) -> Vec<Span<'static>> {
+    let Some(style) = crate::ccu_theme::active().and_then(|theme| theme.status_card_style(role))
+    else {
+        return spans;
+    };
+    for span in &mut spans {
+        span.style = span.style.patch(style);
+    }
+    spans
+}
 
 #[derive(Debug, Clone)]
 struct StatusContextWindowData {
@@ -397,17 +414,20 @@ impl StatusHistoryCell {
         let input_fmt = format_tokens_compact(self.token_usage.input);
         let output_fmt = format_tokens_compact(self.token_usage.output);
 
-        vec![
-            Span::from(total_fmt),
-            Span::from(" total "),
-            Span::from(" (").dim(),
-            Span::from(input_fmt).dim(),
-            Span::from(" input").dim(),
-            Span::from(" + ").dim(),
-            Span::from(output_fmt).dim(),
-            Span::from(" output").dim(),
-            Span::from(")").dim(),
-        ]
+        apply_status_card_role(
+            vec![
+                Span::from(total_fmt),
+                Span::from(" total "),
+                Span::from(" (").dim(),
+                Span::from(input_fmt).dim(),
+                Span::from(" input").dim(),
+                Span::from(" + ").dim(),
+                Span::from(output_fmt).dim(),
+                Span::from(" output").dim(),
+                Span::from(")").dim(),
+            ],
+            "usage",
+        )
     }
 
     fn context_window_spans(&self) -> Option<Vec<Span<'static>>> {
@@ -416,14 +436,21 @@ impl StatusHistoryCell {
         let used_fmt = format_tokens_compact(context.tokens_in_context);
         let window_fmt = format_tokens_compact(context.window);
 
-        Some(vec![
-            Span::from(format!("{percent}% left")),
-            Span::from(" (").dim(),
-            Span::from(used_fmt).dim(),
-            Span::from(" used / ").dim(),
-            Span::from(window_fmt).dim(),
-            Span::from(")").dim(),
-        ])
+        let mut spans = vec![Span::styled(
+            format!("{percent}% left"),
+            status_card_style("percent", Style::default()),
+        )];
+        spans.extend(apply_status_card_role(
+            vec![
+                Span::from(" (").dim(),
+                Span::from(used_fmt).dim(),
+                Span::from(" used / ").dim(),
+                Span::from(window_fmt).dim(),
+                Span::from(")").dim(),
+            ],
+            "usage",
+        ));
+        Some(spans)
     }
 
     fn rate_limit_lines(
@@ -432,12 +459,21 @@ impl StatusHistoryCell {
         available_inner_width: usize,
         formatter: &FieldFormatter,
     ) -> Vec<Line<'static>> {
+        let limits_label = status_text("status-card-limits-label", "Limits");
+        let warning_label = status_text("status-card-warning-label", "Warning");
         match &state.rate_limits {
             StatusRateLimitData::Available(rows_data) => {
                 if rows_data.is_empty() {
                     return vec![formatter.line(
-                        "Limits",
-                        vec![Span::from("not available for this account").dim()],
+                        &limits_label,
+                        apply_status_card_role(
+                            vec![Span::from(status_text(
+                            "status-card-limits-unavailable",
+                            "not available for this account",
+                        ))
+                        .dim()],
+                            "limits",
+                        ),
                     )];
                 }
 
@@ -446,32 +482,45 @@ impl StatusHistoryCell {
             StatusRateLimitData::Stale(rows_data) => {
                 let mut lines =
                     self.rate_limit_row_lines(rows_data, available_inner_width, formatter);
-                lines.push(formatter.line(
-                    "Warning",
-                    vec![Span::from(if state.refreshing_rate_limits {
-                        "limits may be stale - run /status again shortly."
-                    } else {
-                        "limits may be stale - start new turn to refresh."
-                    })
-                    .dim()],
-                ));
+                let warning = if state.refreshing_rate_limits {
+                    status_text(
+                        "status-card-limits-stale-run-status",
+                        "limits may be stale - run /status again shortly.",
+                    )
+                } else {
+                    status_text(
+                        "status-card-limits-stale-new-turn",
+                        "limits may be stale - start new turn to refresh.",
+                    )
+                };
+                lines.push(formatter.line(&warning_label, vec![Span::from(warning).dim()]));
                 lines
             }
             StatusRateLimitData::Unavailable => {
                 vec![formatter.line(
-                    "Limits",
-                    vec![Span::from("not available for this account").dim()],
+                    &limits_label,
+                    apply_status_card_role(
+                        vec![Span::from(status_text(
+                        "status-card-limits-unavailable",
+                        "not available for this account",
+                    ))
+                    .dim()],
+                        "limits",
+                    ),
                 )]
             }
             StatusRateLimitData::Missing => {
+                let message = if state.refreshing_rate_limits {
+                    status_text(
+                        "status-card-limits-refresh-requested",
+                        "refresh requested; run /status again shortly.",
+                    )
+                } else {
+                    status_text("status-card-limits-data-pending", "data not available yet")
+                };
                 vec![formatter.line(
-                    "Limits",
-                    vec![Span::from(if state.refreshing_rate_limits {
-                        "refresh requested; run /status again shortly."
-                    } else {
-                        "data not available yet"
-                    })
-                    .dim()],
+                    &limits_label,
+                    apply_status_card_role(vec![Span::from(message).dim()], "limits"),
                 )]
             }
         }
@@ -495,9 +544,15 @@ impl StatusHistoryCell {
                     let percent_remaining = (100.0 - percent_used).clamp(0.0, 100.0);
                     let summary = format_status_limit_summary(percent_remaining);
                     let full_value_spans = vec![
-                        Span::from(render_status_limit_progress_bar(percent_remaining)),
+                        Span::styled(
+                            render_status_limit_progress_bar(percent_remaining),
+                            status_card_style("progress", Style::default()),
+                        ),
                         Span::from(" "),
-                        Span::from(summary.clone()),
+                        Span::styled(
+                            summary.clone(),
+                            status_card_style("limits", Style::default()),
+                        ),
                     ];
                     // On narrow terminals, keep the percentage visible rather than
                     // letting the fixed-width progress bar crowd out the reset time.
@@ -506,7 +561,10 @@ impl StatusHistoryCell {
                     {
                         full_value_spans
                     } else {
-                        vec![Span::from(summary)]
+                        vec![Span::styled(
+                            summary,
+                            status_card_style("limits", Style::default()),
+                        )]
                     };
                     let base_spans = formatter.full_spans(row.label.as_str(), value_spans);
                     let base_line = Line::from(base_spans.clone());
@@ -555,8 +613,10 @@ impl StatusHistoryCell {
                 }
                 StatusRateLimitValue::Text(text) => {
                     let label = row.label.clone();
-                    let spans =
-                        formatter.full_spans(label.as_str(), vec![Span::from(text.clone())]);
+                    let spans = formatter.full_spans(
+                        label.as_str(),
+                        apply_status_card_role(vec![Span::from(text.clone())], "limits"),
+                    );
                     lines.push(Line::from(spans));
                 }
             }
@@ -571,10 +631,12 @@ impl StatusHistoryCell {
         seen: &mut BTreeSet<String>,
         labels: &mut Vec<String>,
     ) {
+        let limits_label = status_text("status-card-limits-label", "Limits");
+        let warning_label = status_text("status-card-warning-label", "Warning");
         match &state.rate_limits {
             StatusRateLimitData::Available(rows) => {
                 if rows.is_empty() {
-                    push_label(labels, seen, "Limits");
+                    push_label(labels, seen, &limits_label);
                 } else {
                     for row in rows {
                         push_label(labels, seen, row.label.as_str());
@@ -585,12 +647,16 @@ impl StatusHistoryCell {
                 for row in rows {
                     push_label(labels, seen, row.label.as_str());
                 }
-                push_label(labels, seen, "Warning");
+                push_label(labels, seen, &warning_label);
             }
-            StatusRateLimitData::Unavailable => push_label(labels, seen, "Limits"),
-            StatusRateLimitData::Missing => push_label(labels, seen, "Limits"),
+            StatusRateLimitData::Unavailable => push_label(labels, seen, &limits_label),
+            StatusRateLimitData::Missing => push_label(labels, seen, &limits_label),
         }
     }
+}
+
+fn status_text(key: &str, english: &str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
 }
 
 fn status_permission_summary(
@@ -726,16 +792,42 @@ impl HistoryCell for StatusHistoryCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = Vec::new();
         lines.push(Line::from(vec![
-            Span::from(format!("{}>_ ", FieldFormatter::INDENT)).dim(),
-            Span::from("OpenAI Codex").bold(),
+            Span::styled(
+                format!("{}>_ ", FieldFormatter::INDENT),
+                status_card_style("title", Style::default().dim()),
+            ),
+            Span::styled(
+                "OpenAI Codex",
+                status_card_style("title", Style::default()).bold(),
+            ),
             Span::from(" ").dim(),
-            Span::from(format!("(v{CODEX_CLI_VERSION})")).dim(),
+            Span::styled(
+                format!("(v{CODEX_CLI_VERSION})"),
+                status_card_style("version", Style::default().dim()),
+            ),
         ]));
 
         let available_inner_width = usize::from(width.saturating_sub(4));
         if available_inner_width == 0 {
             return Vec::new();
         }
+
+        let model_label = status_text("status-card-model-label", "Model");
+        let directory_label = status_text("status-card-directory-label", "Directory");
+        let permissions_label = status_text("status-card-permissions-label", "Permissions");
+        let agents_label = status_text("status-card-agents-label", "Agents.md");
+        let model_provider_label =
+            status_text("status-card-model-provider-label", "Model provider");
+        let account_label = status_text("status-card-account-label", "Account");
+        let thread_name_label = status_text("status-card-thread-name-label", "Thread name");
+        let session_label = status_text("status-card-session-label", "Session");
+        let forked_from_label = status_text("status-card-forked-from-label", "Forked from");
+        let collaboration_mode_label =
+            status_text("status-card-collaboration-mode-label", "Collaboration mode");
+        let token_usage_label = status_text("status-card-token-usage-label", "Token usage");
+        let context_window_label =
+            status_text("status-card-context-window-label", "Context window");
+        let remote_label = status_text("status-card-remote-label", "Remote");
 
         let account_value = self.account.as_ref().map(|account| match account {
             StatusAccountDisplay::ChatGpt { email, plan } => match (email, plan) {
@@ -744,15 +836,18 @@ impl HistoryCell for StatusHistoryCell {
                 (None, Some(plan)) => plan.clone(),
                 (None, None) => "ChatGPT".to_string(),
             },
-            StatusAccountDisplay::ApiKey => {
-                "API key configured (run codex login to use ChatGPT)".to_string()
-            }
+            StatusAccountDisplay::ApiKey => status_text(
+                "status-card-api-key-configured",
+                "API key configured (run codex login to use ChatGPT)",
+            ),
         });
 
-        let mut labels: Vec<String> = vec!["Model", "Directory", "Permissions", "Agents.md"]
-            .into_iter()
-            .map(str::to_string)
-            .collect();
+        let mut labels: Vec<String> = vec![
+            model_label.clone(),
+            directory_label.clone(),
+            permissions_label.clone(),
+            agents_label.clone(),
+        ];
         let mut seen: BTreeSet<String> = labels.iter().cloned().collect();
         let thread_name = self.thread_name.as_deref().filter(|name| !name.is_empty());
         #[expect(clippy::expect_used)]
@@ -768,26 +863,26 @@ impl HistoryCell for StatusHistoryCell {
             .clone();
 
         if self.model_provider.is_some() {
-            push_label(&mut labels, &mut seen, "Model provider");
+            push_label(&mut labels, &mut seen, &model_provider_label);
         }
         if account_value.is_some() {
-            push_label(&mut labels, &mut seen, "Account");
+            push_label(&mut labels, &mut seen, &account_label);
         }
         if thread_name.is_some() {
-            push_label(&mut labels, &mut seen, "Thread name");
+            push_label(&mut labels, &mut seen, &thread_name_label);
         }
         if self.session_id.is_some() {
-            push_label(&mut labels, &mut seen, "Session");
+            push_label(&mut labels, &mut seen, &session_label);
         }
         if self.session_id.is_some() && self.forked_from.is_some() {
-            push_label(&mut labels, &mut seen, "Forked from");
+            push_label(&mut labels, &mut seen, &forked_from_label);
         }
         if self.collaboration_mode.is_some() {
-            push_label(&mut labels, &mut seen, "Collaboration mode");
+            push_label(&mut labels, &mut seen, &collaboration_mode_label);
         }
-        push_label(&mut labels, &mut seen, "Token usage");
+        push_label(&mut labels, &mut seen, &token_usage_label);
         if self.token_usage.context_window.is_some() {
-            push_label(&mut labels, &mut seen, "Context window");
+            push_label(&mut labels, &mut seen, &context_window_label);
         }
         self.collect_rate_limit_labels(&rate_limit_state, &mut seen, &mut labels);
         self.thread_usage.push_labels(&mut labels, &mut seen);
@@ -795,18 +890,38 @@ impl HistoryCell for StatusHistoryCell {
         let formatter = FieldFormatter::from_labels(labels.iter().map(String::as_str));
         let value_width = formatter.value_width(available_inner_width);
 
-        let note_first_line = Line::from(vec![
-            Span::from("Visit ").cyan(),
-            CHATGPT_USAGE_URL.cyan().underlined(),
-            Span::from(" for up-to-date").cyan(),
-        ]);
-        let note_second_line = Line::from(vec![
-            Span::from("information on rate limits and credits").cyan(),
-        ]);
-        let note_lines = adaptive_wrap_lines(
-            [note_first_line, note_second_line],
-            RtOptions::new(available_inner_width),
+        let usage_note = crate::i18n::global().text_with_string_arg(
+            "status-card-usage-note",
+            "url",
+            CHATGPT_USAGE_URL,
+            || {
+                format!(
+                    "Visit {CHATGPT_USAGE_URL} for up-to-date information on rate limits and credits"
+                )
+            },
         );
+        let note_line = if let Some((before, after)) = usage_note.split_once(CHATGPT_USAGE_URL) {
+            Line::from(vec![
+                Span::styled(
+                    before.to_string(),
+                    status_card_style("link", Style::default().cyan()),
+                ),
+                Span::styled(
+                    CHATGPT_USAGE_URL,
+                    status_card_style("link", Style::default().cyan()).underlined(),
+                ),
+                Span::styled(
+                    after.to_string(),
+                    status_card_style("link", Style::default().cyan()),
+                ),
+            ])
+        } else {
+            Line::from(Span::styled(
+                usage_note,
+                status_card_style("link", Style::default().cyan()),
+            ))
+        };
+        let note_lines = adaptive_wrap_lines([note_line], RtOptions::new(available_inner_width));
         lines.push(Line::from(Vec::<Span<'static>>::new()));
         // The ChatGPT usage page only applies to providers backed by OpenAI auth;
         // providers like Bedrock manage limits and billing elsewhere.
@@ -826,7 +941,7 @@ impl HistoryCell for StatusHistoryCell {
             );
             let mut wrapped_remote = wrapped_remote.into_iter();
             if let Some(first) = wrapped_remote.next() {
-                lines.push(formatter.line("Remote", first.spans));
+                lines.push(formatter.line(&remote_label, first.spans));
                 lines.extend(wrapped_remote.map(|line| formatter.continuation(line.spans)));
             }
             lines.push(Line::from(Vec::<Span<'static>>::new()));
@@ -841,41 +956,59 @@ impl HistoryCell for StatusHistoryCell {
 
         let directory_value = format_directory_display(&self.directory, Some(value_width));
 
-        lines.push(formatter.line("Model", model_spans));
+        lines.push(formatter.line(&model_label, apply_status_card_role(model_spans, "model")));
         if let Some(model_provider) = self.model_provider.as_ref() {
-            lines.push(formatter.line("Model provider", vec![Span::from(model_provider.clone())]));
+            lines.push(formatter.line(
+                &model_provider_label,
+                vec![Span::from(model_provider.clone())],
+            ));
         }
-        lines.push(formatter.line("Directory", vec![Span::from(directory_value)]));
-        lines.push(formatter.line("Permissions", vec![Span::from(self.permissions.clone())]));
-        lines.push(formatter.line("Agents.md", vec![Span::from(agents_summary)]));
+        lines.push(formatter.line(
+            &directory_label,
+            apply_status_card_role(vec![Span::from(directory_value)], "path"),
+        ));
+        lines.push(formatter.line(
+            &permissions_label,
+            apply_status_card_role(
+                vec![Span::from(self.permissions.clone()).bold()],
+                "permissions",
+            ),
+        ));
+        lines.push(formatter.line(&agents_label, vec![Span::from(agents_summary)]));
 
         if let Some(account_value) = account_value {
-            lines.push(formatter.line("Account", vec![Span::from(account_value)]));
+            lines.push(formatter.line(&account_label, vec![Span::from(account_value)]));
         }
 
         if let Some(thread_name) = thread_name {
-            lines.push(formatter.line("Thread name", vec![Span::from(thread_name.to_string())]));
+            lines.push(formatter.line(
+                &thread_name_label,
+                vec![Span::from(thread_name.to_string())],
+            ));
         }
         if let Some(collab_mode) = self.collaboration_mode.as_ref() {
-            lines.push(formatter.line("Collaboration mode", vec![Span::from(collab_mode.clone())]));
+            lines.push(formatter.line(
+                &collaboration_mode_label,
+                vec![Span::from(collab_mode.clone())],
+            ));
         }
         if let Some(session) = self.session_id.as_ref() {
-            lines.push(formatter.line("Session", vec![Span::from(session.clone())]));
+            lines.push(formatter.line(&session_label, vec![Span::from(session.clone())]));
         }
         if self.session_id.is_some()
             && let Some(forked_from) = self.forked_from.as_ref()
         {
-            lines.push(formatter.line("Forked from", vec![Span::from(forked_from.clone())]));
+            lines.push(formatter.line(&forked_from_label, vec![Span::from(forked_from.clone())]));
         }
 
         lines.push(Line::from(Vec::<Span<'static>>::new()));
         // Hide token usage only for ChatGPT subscribers
         if !matches!(self.account, Some(StatusAccountDisplay::ChatGpt { .. })) {
-            lines.push(formatter.line("Token usage", self.token_usage_spans()));
+            lines.push(formatter.line(&token_usage_label, self.token_usage_spans()));
         }
 
         if let Some(spans) = self.context_window_spans() {
-            lines.push(formatter.line("Context window", spans));
+            lines.push(formatter.line(&context_window_label, spans));
         }
 
         lines.extend(self.rate_limit_lines(&rate_limit_state, available_inner_width, &formatter));
@@ -892,7 +1025,9 @@ impl HistoryCell for StatusHistoryCell {
             .map(|line| truncate_line_to_width(line, inner_width))
             .collect();
 
-        with_border_with_inner_width(truncated_lines, inner_width)
+        let border_style =
+            crate::ccu_theme::active().and_then(|theme| theme.status_card_style("border"));
+        with_border_with_inner_width_and_style(truncated_lines, inner_width, border_style)
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {

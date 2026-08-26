@@ -97,13 +97,18 @@ use codex_protocol::protocol::AskForApproval;
 use codex_protocol::user_input::UserInput;
 use codex_terminal_detection::TerminalName;
 
+const CODEX_CLI_BUILD_VERSION: &str = match option_env!("CODEX_CCU_BUILD_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 /// Codex CLI
 ///
 /// If no subcommand is specified, options will be forwarded to the interactive CLI.
 #[derive(Debug, Parser)]
 #[clap(
     author,
-    version,
+    version = CODEX_CLI_BUILD_VERSION,
     // If a sub‑command is given, ignore requirements of the default args.
     subcommand_negates_reqs = true,
     // The executable is sometimes invoked via a platform‑specific name like
@@ -822,7 +827,7 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
         ExitReason::UserRequested => false,
     };
 
-    let update_action = exit_info.update_action;
+    let update_action = exit_info.update_action.clone();
     let color_enabled = supports_color::on(Stream::Stdout).is_some();
     for line in format_exit_messages(exit_info, color_enabled) {
         println!("{line}");
@@ -841,39 +846,54 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
 fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     println!();
     let cmd_str = action.command_str();
-    println!("Updating Codex via `{cmd_str}`...");
+    let ccu_managed = matches!(&action, UpdateAction::CcuManager { .. });
+    if ccu_managed {
+        println!("Opening CCU Manager via `{cmd_str}`...");
+    } else {
+        println!("Updating Codex via `{cmd_str}`...");
+    }
+
     let status = {
         #[cfg(windows)]
         {
             let (cmd, args) = action.command_args();
-            let cmd = if action == UpdateAction::StandaloneWindows {
-                // These args contain PowerShell metacharacters, so do not let
-                // PATHEXT select a batch shim for this action.
-                "powershell.exe"
+            if matches!(
+                &action,
+                UpdateAction::StandaloneWindows | UpdateAction::CcuManager { .. }
+            ) {
+                // Run the standalone PowerShell installer with PowerShell
+                // itself. Routing this through `cmd.exe /C` would parse
+                // PowerShell metacharacters like `|` before PowerShell sees
+                // the installer command.
+                let cmd = if action == UpdateAction::StandaloneWindows {
+                    "powershell.exe".to_string()
+                } else {
+                    cmd
+                };
+                std::process::Command::new(cmd).args(args).status()?
             } else {
-                cmd
-            };
-            let path_env =
-                std::env::var_os("PATH").ok_or_else(|| anyhow::anyhow!("PATH is not set"))?;
-            let command_path = resolve_windows_update_command_from_path(cmd, &path_env)?;
-            // Do not let a project-local command or package-manager config
-            // influence the updater after the user accepts the update prompt.
-            let update_cwd = tempfile::tempdir()?;
-            // Resolve through PATH without consulting the project cwd. When
-            // this returns a .cmd/.bat shim, std::process::Command routes the
-            // absolute path through the system command processor.
-            std::process::Command::new(command_path)
-                .args(args)
-                .current_dir(update_cwd.path())
-                .status()?
+                let path_env =
+                    std::env::var_os("PATH").ok_or_else(|| anyhow::anyhow!("PATH is not set"))?;
+                let command_path = resolve_windows_update_command_from_path(&cmd, &path_env)?;
+                // Do not let a project-local command or package-manager config
+                // influence the updater after the user accepts the update prompt.
+                let update_cwd = tempfile::tempdir()?;
+                // Resolve through PATH without consulting the project cwd. When
+                // this returns a .cmd/.bat shim, std::process::Command routes the
+                // absolute path through the system command processor.
+                std::process::Command::new(command_path)
+                    .args(args)
+                    .current_dir(update_cwd.path())
+                    .status()?
+            }
         }
         #[cfg(not(windows))]
         {
             let (cmd, args) = action.command_args();
-            let command_path = crate::wsl_paths::normalize_for_wsl(cmd);
+            let command_path = crate::wsl_paths::normalize_for_wsl(&cmd);
             let normalized_args: Vec<String> = args
                 .iter()
-                .map(crate::wsl_paths::normalize_for_wsl)
+                .map(|arg| crate::wsl_paths::normalize_for_wsl(arg))
                 .collect();
             std::process::Command::new(&command_path)
                 .args(&normalized_args)
@@ -883,7 +903,11 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     if !status.success() {
         anyhow::bail!("`{cmd_str}` failed with status {status}");
     }
-    println!("\n🎉 Update ran successfully! Please restart Codex.");
+    if ccu_managed {
+        println!("\nCCU Manager has taken over the verified upgrade and install handoff.");
+    } else {
+        println!("\n🎉 Update ran successfully! Please restart Codex.");
+    }
     Ok(())
 }
 
@@ -1062,6 +1086,12 @@ fn stage_str(stage: Stage) -> &'static str {
 }
 
 fn main() -> anyhow::Result<()> {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    if args.len() == 2 && args[1].as_os_str() == std::ffi::OsStr::new("--i18n-self-check") {
+        println!("{}", codex_tui::i18n_self_check_json());
+        return Ok(());
+    }
+
     let remote_control_disabled = codex_app_server::take_remote_control_disabled_env();
     arg0_dispatch_or_else(move |arg0_paths: Arg0DispatchPaths| async move {
         cli_main(arg0_paths, remote_control_disabled).await?;
