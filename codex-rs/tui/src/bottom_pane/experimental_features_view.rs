@@ -20,7 +20,7 @@ use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
+use crate::style::menu_surface_style;
 
 use codex_features::Feature;
 
@@ -31,6 +31,10 @@ use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::measure_rows_height;
 use super::selection_popup_common::render_rows;
+
+fn experimental_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
 
 pub(crate) struct ExperimentalFeatureItem {
     pub feature: Feature,
@@ -56,9 +60,15 @@ impl ExperimentalFeaturesView {
         keymap: ListKeymap,
     ) -> Self {
         let mut header = ColumnRenderable::new();
-        header.push(Line::from("Experimental features".bold()));
         header.push(Line::from(
-            "Toggle experimental features. Changes are saved to config.toml.".dim(),
+            experimental_text("experimental-features-title", "Experimental features").bold(),
+        ));
+        header.push(Line::from(
+            experimental_text(
+                "experimental-features-subtitle",
+                "Toggle experimental features. Changes are saved to config.toml.",
+            )
+            .dim(),
         ));
 
         let mut view = Self {
@@ -222,7 +232,7 @@ impl Renderable for ExperimentalFeaturesView {
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(menu_surface_style())
             .render(content_area, buf);
 
         let header_height = self
@@ -258,7 +268,10 @@ impl Renderable for ExperimentalFeaturesView {
                 &rows,
                 &self.state,
                 MAX_POPUP_ROWS,
-                "  No experimental features available for now",
+                &experimental_text(
+                    "experimental-features-empty",
+                    "  No experimental features available for now",
+                ),
             );
         }
 
@@ -289,16 +302,25 @@ impl Renderable for ExperimentalFeaturesView {
 
 fn experimental_popup_hint_line(keymap: &ListKeymap) -> Line<'static> {
     let mut spans = vec![
-        "Press ".into(),
+        experimental_text("experimental-features-hint-press", "Press").into(),
+        " ".into(),
         key_hint::plain(KeyCode::Char(' ')).into(),
-        " to select".into(),
+        " ".into(),
     ];
     if let Some(accept) = keymap.primary_hint(ListAction::Accept) {
         spans.extend([
-            " or ".into(),
+            experimental_text("experimental-features-hint-select", "to select or").into(),
+            " ".into(),
             accept.into(),
-            " to save for next conversation".into(),
+            " ".into(),
+            experimental_text(
+                "experimental-features-hint-save",
+                "to save for next conversation",
+            )
+            .into(),
         ]);
+    } else {
+        spans.push(experimental_text("experimental-features-hint-select-only", "to select").into());
     }
     Line::from(spans)
 }
