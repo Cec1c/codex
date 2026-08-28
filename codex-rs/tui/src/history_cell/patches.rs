@@ -66,7 +66,13 @@ pub(crate) fn new_view_image_tool_call(path: LegacyAppPathString, cwd: &Path) ->
     let display_path = path
         .to_inferred_path_uri()
         .and_then(|path| path.to_abs_path().ok())
-        .map(|path| display_path_for(path.as_path(), cwd))
+        .map(|path| {
+            if path.as_path().starts_with(cwd) {
+                display_path_for(path.as_path(), cwd)
+            } else {
+                path.as_path().display().to_string()
+            }
+        })
         .unwrap_or_else(|| path.into_string());
 
     let lines: Vec<Line<'static>> = vec![

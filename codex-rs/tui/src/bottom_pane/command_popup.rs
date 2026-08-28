@@ -205,7 +205,7 @@ impl CommandPopup {
             .into_iter()
             .map(|(item, indices)| {
                 let name = format!("/{}", item.command());
-                let description = item.description().to_string();
+                let description = item.description();
                 GenericDisplayRow {
                     name,
                     name_prefix_spans: Vec::new(),
@@ -253,10 +253,14 @@ impl CommandItem {
         }
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> String {
         match self {
-            Self::Builtin(cmd) => cmd.description(),
-            Self::ServiceTier(command) => &command.description,
+            Self::Builtin(cmd) => {
+                let (_id, key) = cmd.description_metadata();
+                let english = cmd.description();
+                crate::i18n::global().text(key, None, || english.to_string())
+            }
+            Self::ServiceTier(command) => command.description.clone(),
         }
     }
 }
@@ -264,6 +268,9 @@ impl CommandItem {
 impl WidgetRef for CommandPopup {
     fn render_ref(&self, area: Rect, buf: &mut Buffer) {
         let rows = self.rows_from_matches(self.filtered());
+        let no_matches = crate::i18n::global().text("command-popup-no-matches", None, || {
+            "no matches".to_string()
+        });
         render_rows_with_col_width_mode(
             area.inset(Insets::tlbr(
                 /*top*/ 0, /*left*/ 2, /*bottom*/ 0, /*right*/ 0,
@@ -272,7 +279,7 @@ impl WidgetRef for CommandPopup {
             &rows,
             &self.state,
             MAX_POPUP_ROWS,
-            "no matches",
+            &no_matches,
             COMMAND_COLUMN_WIDTH,
         );
     }
