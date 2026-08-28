@@ -160,6 +160,14 @@ jobs:
           upstream_commit="$(git rev-list -n 1 "$upstream_tag")"
           upstream_main_commit="$(git rev-parse refs/remotes/upstream/main)"
 
+          remote_prepared_commit="$(
+            git ls-remote origin "refs/heads/$release_branch" | awk '{print $1}'
+          )"
+          if [[ -z "$PREPARED_REF" && -n "$remote_prepared_commit" ]]; then
+            PREPARED_REF="$release_branch"
+            echo "Using existing prepared release branch $PREPARED_REF."
+          fi
+
           if [[ -n "$PREPARED_REF" ]]; then
             if [[ "$PREPARED_REF" != "$release_branch" ]]; then
               echo "Prepared ref must be the expected release branch $release_branch" >&2
