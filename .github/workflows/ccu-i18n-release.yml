@@ -160,6 +160,14 @@ jobs:
           upstream_commit="$(git rev-list -n 1 "$upstream_tag")"
           upstream_main_commit="$(git rev-parse refs/remotes/upstream/main)"
 
+          remote_prepared_commit="$(
+            git ls-remote origin "refs/heads/$release_branch" | awk '{print $1}'
+          )"
+          if [[ -z "$PREPARED_REF" && -n "$remote_prepared_commit" ]]; then
+            PREPARED_REF="$release_branch"
+            echo "Using existing prepared release branch $PREPARED_REF."
+          fi
+
           if [[ -n "$PREPARED_REF" ]]; then
             if [[ "$PREPARED_REF" != "$release_branch" ]]; then
               echo "Prepared ref must be the expected release branch $release_branch" >&2
@@ -317,6 +325,7 @@ jobs:
                   jq -r --arg title "$title" '.[] | select(.title == $title) | .number' |
                   head -n 1
               )"
+              unchanged_conflict=false
               if [[ -z "$issue_number" ]]; then
                 issue_url="$(
                   gh issue create --repo "$GITHUB_REPOSITORY" \
@@ -326,6 +335,13 @@ jobs:
                 )"
                 issue_number="${issue_url##*/}"
               else
+                existing_body="$(
+                  gh issue view "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                    --json body --jq .body
+                )"
+                if grep -Fq -- "<!-- ccu-sync-metadata:$metadata -->" <<<"$existing_body"; then
+                  unchanged_conflict=true
+                fi
                 gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
                   --body-file "$body_file" \
                   --add-label ccu-sync-conflict
@@ -347,6 +363,11 @@ jobs:
                   --body "The workflow token could not create \`$agent_base_branch\` at \`$upstream_commit\`. This commonly happens when the upstream commit changes files under \`.github/workflows/\`. Create the branch with trusted maintainer credentials, then re-run the CCU i18n release workflow."
                 echo "Could not create trusted agent base branch; conflict issue #$issue_number records the recovery action." >&2
                 exit 1
+              fi
+
+              if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$unchanged_conflict" == "true" ]]; then
+                echo "::warning::Conflict issue #$issue_number already tracks this exact release state; skipping duplicate resolver dispatch."
+                exit 0
               fi
 
               gh workflow run ccu-conflict-resolver.lock.yml \

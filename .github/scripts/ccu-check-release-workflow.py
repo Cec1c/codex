@@ -19,6 +19,41 @@ def main() -> None:
             "branch and dispatching the resolver"
         )
 
+    prepared_ref_markers = [
+        'remote_prepared_commit="$(',
+        'git ls-remote origin "refs/heads/$release_branch"',
+        'if [[ -z "$PREPARED_REF" && -n "$remote_prepared_commit" ]]',
+        'PREPARED_REF="$release_branch"',
+        'if [[ -n "$PREPARED_REF" ]]',
+        'git fetch --no-tags origin "$PATCH_REF:refs/remotes/origin/ccu-patch-source"',
+    ]
+    prepared_ref_positions = [
+        workflow.index(marker) for marker in prepared_ref_markers
+    ]
+    if prepared_ref_positions != sorted(prepared_ref_positions):
+        raise SystemExit(
+            "existing prepared release branches must be detected and validated before "
+            "replaying the historical patch stack"
+        )
+
+    duplicate_conflict_markers = [
+        "unchanged_conflict=false",
+        'gh issue view "$issue_number"',
+        'grep -Fq -- "<!-- ccu-sync-metadata:$metadata -->"',
+        'unchanged_conflict=true',
+        'if [[ "$GITHUB_EVENT_NAME" == "schedule"',
+        "skipping duplicate resolver dispatch",
+        "gh workflow run ccu-conflict-resolver.lock.yml",
+    ]
+    duplicate_conflict_positions = [
+        workflow.index(marker) for marker in duplicate_conflict_markers
+    ]
+    if duplicate_conflict_positions != sorted(duplicate_conflict_positions):
+        raise SystemExit(
+            "scheduled release retries must suppress unchanged conflict dispatches "
+            "without blocking explicit workflow retries"
+        )
+
     required_markers = [
         'gh issue comment "$issue_number"',
         "The workflow token could not create",
