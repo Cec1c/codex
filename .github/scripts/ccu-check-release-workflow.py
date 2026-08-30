@@ -36,6 +36,24 @@ def main() -> None:
             "replaying the historical patch stack"
         )
 
+    duplicate_conflict_markers = [
+        "unchanged_conflict=false",
+        'gh issue view "$issue_number"',
+        'grep -Fq -- "<!-- ccu-sync-metadata:$metadata -->"',
+        'unchanged_conflict=true',
+        'if [[ "$GITHUB_EVENT_NAME" == "schedule"',
+        "skipping duplicate resolver dispatch",
+        "gh workflow run ccu-conflict-resolver.lock.yml",
+    ]
+    duplicate_conflict_positions = [
+        workflow.index(marker) for marker in duplicate_conflict_markers
+    ]
+    if duplicate_conflict_positions != sorted(duplicate_conflict_positions):
+        raise SystemExit(
+            "scheduled release retries must suppress unchanged conflict dispatches "
+            "without blocking explicit workflow retries"
+        )
+
     required_markers = [
         'gh issue comment "$issue_number"',
         "The workflow token could not create",
