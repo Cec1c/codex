@@ -207,7 +207,6 @@ use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::key_hint::ShortcutHint;
 use crate::key_hint::has_ctrl_or_alt;
-use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use codex_message_history::HistoryBatchCursor;
 use crossterm::event::KeyCode;
@@ -279,6 +278,7 @@ use super::skill_popup::SkillPopup;
 use super::slash_commands::BuiltinCommandFlags;
 use super::slash_commands::ServiceTierCommand;
 use super::slash_commands::SlashCommandItem;
+use super::status_line_style::fit_status_line_to_width;
 use crate::bottom_pane::paste_burst::FlushResult;
 use crate::history_cell::sanitize_user_text;
 use crate::key_hint::KeyBindingListExt;
@@ -293,7 +293,7 @@ use crate::render::Insets;
 use crate::render::RectExt;
 use crate::render::renderable::Renderable;
 use crate::slash_command::SlashCommand;
-use crate::style::user_message_style;
+use crate::style::composer_style;
 use codex_protocol::ThreadId;
 use codex_protocol::user_input::ByteRange;
 use codex_protocol::user_input::MAX_USER_INPUT_TEXT_CHARS;
@@ -3074,8 +3074,15 @@ impl ChatComposer {
                 .slash_input()
                 .validate_submission(&text, input_starts_with_space)
         {
-            let message = format!(
-                r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+            let message = crate::i18n::global().text_with_string_arg(
+                "slash-unrecognized-command",
+                "name",
+                name.as_str(),
+                || {
+                    format!(
+                        r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+                    )
+                },
             );
             self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
                 history_cell::new_info_event(message, /*hint*/ None),
@@ -4754,9 +4761,9 @@ impl ChatComposer {
                         combined_status_line
                     };
                     let mut truncated_status_line = if status_line_active {
-                        combined_status_line.as_ref().map(|line| {
-                            truncate_line_with_ellipsis_if_overflow(line.clone(), available_width)
-                        })
+                        combined_status_line
+                            .as_ref()
+                            .map(|line| fit_status_line_to_width(line.clone(), available_width))
                     } else {
                         None
                     };
@@ -4811,9 +4818,9 @@ impl ChatComposer {
                     if status_line_active
                         && let Some(max_left) = max_left_width_for_right(hint_rect, right_width)
                         && left_width > max_left
-                        && let Some(line) = combined_status_line.as_ref().map(|line| {
-                            truncate_line_with_ellipsis_if_overflow(line.clone(), max_left as usize)
-                        })
+                        && let Some(line) = combined_status_line
+                            .as_ref()
+                            .map(|line| fit_status_line_to_width(line.clone(), max_left as usize))
                     {
                         left_width = line.width() as u16;
                         truncated_status_line = Some(line);
@@ -4935,7 +4942,7 @@ impl ChatComposer {
                 }
             }
         }
-        let style = user_message_style();
+        let style = composer_style();
         Block::default().style(style).render(composer_rect, buf);
         if !remote_images_rect.is_empty() {
             Paragraph::new(self.attachments.remote_image_lines())

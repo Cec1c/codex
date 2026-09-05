@@ -71,7 +71,7 @@ impl App {
                 self.chat_widget.rollout_path().as_deref(),
             ),
             disconnect_info,
-            update_action: self.pending_update_action,
+            update_action: self.pending_update_action.clone(),
             exit_reason,
         }
     }

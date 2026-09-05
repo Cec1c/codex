@@ -581,11 +581,19 @@ impl ListSelectionView {
                     let prefix = if is_selected { '›' } else { ' ' };
                     let name = item.name.as_str();
                     let marker = if item.is_current {
-                        " (current)"
+                        format!(
+                            " ({})",
+                            crate::i18n::global()
+                                .text("selection-marker-current", None, || "current".to_string(),)
+                        )
                     } else if item.is_default {
-                        " (default)"
+                        format!(
+                            " ({})",
+                            crate::i18n::global()
+                                .text("selection-marker-default", None, || "default".to_string(),)
+                        )
                     } else {
-                        ""
+                        String::new()
                     };
                     let name_with_marker = format!("{name}{marker}");
                     let is_disabled = item.is_disabled || item.disabled_reason.is_some();
@@ -1319,6 +1327,8 @@ impl Renderable for ListSelectionView {
                 width: effective_rows_width.max(1),
                 height: list_area.height,
             };
+            let no_matches = crate::i18n::global()
+                .text("selection-no-matches", None, || "no matches".to_string());
             let rendered_rows = match self.row_display {
                 SelectionRowDisplay::Wrapped => render_rows_with_col_width_mode(
                     render_area,
@@ -1326,7 +1336,7 @@ impl Renderable for ListSelectionView {
                     &rows,
                     &self.state,
                     render_area.height as usize,
-                    "no matches",
+                    &no_matches,
                     column_width,
                 ),
                 SelectionRowDisplay::SingleLine => render_rows_single_line_with_col_width_mode(
@@ -1335,7 +1345,7 @@ impl Renderable for ListSelectionView {
                     &rows,
                     &self.state,
                     render_area.height as usize,
-                    "no matches",
+                    &no_matches,
                     column_width,
                 ),
             };

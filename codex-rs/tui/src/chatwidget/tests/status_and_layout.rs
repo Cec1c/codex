@@ -25,6 +25,73 @@ fn take_workspace_headline_request_id(
     }
 }
 
+#[test]
+fn ccu_quota_prefers_real_balance_and_weights_pro20x_accounts() {
+    let summary = crate::chatwidget::status_surfaces::parse_ccu_quota(
+        r#"{
+            "accounts": [
+                {
+                    "plan": "plus",
+                    "remainingPercent": 100,
+                    "balance": 5.96,
+                    "currency": "cny"
+                },
+                {
+                    "plan": "pro20x",
+                    "remainingPercent": 50,
+                    "balance": 12,
+                    "currency": "CNY"
+                }
+            ]
+        }"#,
+    )
+    .expect("valid CCU quota summary");
+
+    assert_eq!(summary.balance, Some((17.96, "CNY".to_string())));
+    assert_eq!(summary.remaining_percent, Some(52));
+}
+
+#[test]
+fn ccu_quota_falls_back_to_percent_when_currencies_differ() {
+    let summary = crate::chatwidget::status_surfaces::parse_ccu_quota(
+        r#"{
+            "accounts": [
+                { "plan": "plus", "remainingPercent": 80, "balance": 10, "currency": "CNY" },
+                { "plan": "plus", "remainingPercent": 40, "balance": 2, "currency": "USD" }
+            ]
+        }"#,
+    )
+    .expect("valid CCU quota summary");
+
+    assert_eq!(summary.balance, None);
+    assert_eq!(summary.remaining_percent, Some(60));
+}
+
+#[tokio::test]
+async fn ccu_status_line_preset_is_optional_and_explicit_config_wins() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.config.tui_status_line = None;
+    chat.ccu_status_line_preset_enabled = false;
+    assert_eq!(
+        chat.configured_status_line_items(),
+        vec!["model-with-reasoning", "current-dir"]
+    );
+
+    chat.ccu_status_line_preset_enabled = true;
+    assert_eq!(
+        chat.configured_status_line_items(),
+        vec![
+            "model-with-reasoning",
+            "context-tokens",
+            "context-progress",
+            "session-timing",
+        ]
+    );
+
+    chat.config.tui_status_line = Some(vec!["git-branch".to_string()]);
+    assert_eq!(chat.configured_status_line_items(), vec!["git-branch"]);
+}
+
 /// Receiving a token usage update without usage clears the context indicator.
 #[tokio::test]
 async fn token_count_none_resets_context_indicator() {
@@ -217,6 +284,31 @@ async fn token_usage_update_uses_runtime_context_window() {
         !context_line.contains("1M"),
         "expected /status to avoid raw config context window, got: {context_line}"
     );
+}
+
+#[tokio::test]
+async fn context_tokens_use_current_context_instead_of_session_total() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    let context_window = 353_000;
+    let token_info = TokenUsageInfo {
+        total_token_usage: TokenUsage {
+            total_tokens: 11_600_000,
+            ..TokenUsage::default()
+        },
+        last_token_usage: TokenUsage {
+            total_tokens: 42_700,
+            ..TokenUsage::default()
+        },
+        model_context_window: Some(context_window),
+    };
+
+    handle_token_count(&mut chat, Some(token_info));
+
+    assert_eq!(
+        chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::ContextTokens),
+        Some("42.7K/353K".to_string())
+    );
+    assert_eq!(chat.status_line_context_used_percent(), Some(9));
 }
 
 #[tokio::test]
@@ -933,6 +1025,51 @@ async fn rate_limit_snapshot_keeps_prior_credits_when_missing_from_headers() {
     assert_eq!(
         display.primary.as_ref().map(|window| window.used_percent),
         Some(80.0)
+    );
+}
+
+#[tokio::test]
+async fn status_line_credit_balance_uses_real_balance_before_percent_fallbacks() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.on_rate_limit_snapshot(Some(RateLimitSnapshot {
+        limit_id: None,
+        limit_name: None,
+        primary: Some(RateLimitWindow {
+            used_percent: 83,
+            window_duration_mins: Some(300),
+            resets_at: None,
+        }),
+        secondary: None,
+        credits: Some(CreditsSnapshot {
+            has_credits: true,
+            unlimited: false,
+            balance: Some("17.96".to_string()),
+        }),
+        individual_limit: None,
+        plan_type: None,
+        spend_control_reached: None,
+        rate_limit_reached_type: None,
+    }));
+    chat.on_rate_limit_snapshot(Some(RateLimitSnapshot {
+        limit_id: Some("codex_other".to_string()),
+        limit_name: Some("codex_other".to_string()),
+        primary: None,
+        secondary: None,
+        credits: Some(CreditsSnapshot {
+            has_credits: true,
+            unlimited: false,
+            balance: Some("17.96".to_string()),
+        }),
+        individual_limit: None,
+        plan_type: None,
+        spend_control_reached: None,
+        rate_limit_reached_type: None,
+    }));
+
+    assert_eq!(
+        chat.status_line_credit_balance(),
+        Some("17.96 credits".to_string())
     );
 }
 

@@ -2265,18 +2265,41 @@ impl App {
                     .await
                 {
                     Ok(_) => {
-                        let message = if let Some(service_tier) = service_tier {
-                            format!("Service tier set to {service_tier}")
-                        } else {
-                            "Service tier cleared".to_string()
+                        let message = match service_tier.as_deref() {
+                            Some("fast") => {
+                                crate::i18n::global().text("fast-mode-enabled", None, || {
+                                    "Fast mode enabled".to_string()
+                                })
+                            }
+                            Some("default") => {
+                                crate::i18n::global().text("fast-mode-disabled", None, || {
+                                    "Fast mode disabled".to_string()
+                                })
+                            }
+                            Some(service_tier) => crate::i18n::global().text_with_string_arg(
+                                "service-tier-set",
+                                "tier",
+                                service_tier,
+                                || format!("Service tier set to {service_tier}"),
+                            ),
+                            None => {
+                                crate::i18n::global().text("service-tier-cleared", None, || {
+                                    "Service tier cleared".to_string()
+                                })
+                            }
                         };
                         self.chat_widget.add_info_message(message, /*hint*/ None);
                     }
                     Err(err) => {
                         tracing::error!(error = %err, "failed to persist service tier selection");
-                        self.chat_widget.add_error_message(format!(
-                            "Failed to save default service tier: {err}"
-                        ));
+                        self.chat_widget.add_error_message(
+                            crate::i18n::global().text_with_string_arg(
+                                "service-tier-save-failed",
+                                "error",
+                                err.to_string(),
+                                || format!("Failed to save default service tier: {err}"),
+                            ),
+                        );
                     }
                 }
             }
@@ -2849,9 +2872,14 @@ impl App {
                     Err(err) => {
                         let error = format_config_error(&err);
                         tracing::error!(error = %error, "failed to persist status line settings; keeping previous selection");
-                        self.chat_widget.add_error_message(format!(
-                            "Failed to save status line settings: {error}"
-                        ));
+                        self.chat_widget.add_error_message(
+                            crate::i18n::global().text_with_string_arg(
+                                "status-line-save-failed",
+                                "error",
+                                error.clone(),
+                                || format!("Failed to save status line settings: {error}"),
+                            ),
+                        );
                     }
                 }
             }
@@ -2889,9 +2917,15 @@ impl App {
                     Err(err) => {
                         tracing::error!(error = %err, "failed to persist terminal title items; keeping previous selection");
                         self.chat_widget.revert_terminal_title_setup_preview();
-                        self.chat_widget.add_error_message(format!(
-                            "Failed to save terminal title items: {err}"
-                        ));
+                        let error = err.to_string();
+                        self.chat_widget.add_error_message(
+                            crate::i18n::global().text_with_string_arg(
+                                "title-save-failed",
+                                "error",
+                                error.clone(),
+                                || format!("Failed to save terminal title items: {error}"),
+                            ),
+                        );
                     }
                 }
             }

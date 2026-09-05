@@ -1,4 +1,5 @@
-#![cfg(not(debug_assertions))]
+#![cfg(any(not(debug_assertions), test))]
+#![cfg_attr(test, allow(dead_code))]
 
 use crate::key_hint;
 use crate::legacy_core::config::Config;
@@ -12,6 +13,7 @@ use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use crate::update_action::UpdateAction;
 use crate::updates;
+use crate::version::CODEX_CLI_VERSION;
 use color_eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -44,8 +46,11 @@ pub(crate) async fn run_update_prompt_if_needed(
         return Ok(UpdatePromptOutcome::Continue);
     };
 
-    let mut screen =
-        UpdatePromptScreen::new(tui.frame_requester(), latest_version.clone(), update_action);
+    let mut screen = UpdatePromptScreen::new(
+        tui.frame_requester(),
+        latest_version.clone(),
+        update_action.clone(),
+    );
     tui.draw(u16::MAX, |frame| {
         frame.render_widget_ref(&screen, frame.area());
     })?;
@@ -108,10 +113,14 @@ impl UpdatePromptScreen {
         latest_version: String,
         update_action: UpdateAction,
     ) -> Self {
+        let current_version = update_action.ccu_prompt_details().map_or_else(
+            || CODEX_CLI_VERSION.to_string(),
+            |(current, _)| current.to_string(),
+        );
         Self {
             request_frame,
             latest_version,
-            current_version: env!("CARGO_PKG_VERSION").to_string(),
+            current_version,
             update_action,
             highlighted: UpdateSelection::UpdateNow,
             selection: None,
@@ -190,11 +199,20 @@ impl WidgetRef for &UpdatePromptScreen {
         let mut column = ColumnRenderable::new();
 
         let update_command = self.update_action.command_str();
+        let ccu_details = self.update_action.ccu_prompt_details();
+        let managed_by_ccu = ccu_details.is_some();
+        let release_notes_url = ccu_details
+            .map(|(_, release_url)| release_url)
+            .unwrap_or(RELEASE_NOTES_URL);
 
         column.push("");
         column.push(Line::from(vec![
             "  ✨\u{200A}".bold().cyan(),
-            "Update available!".bold(),
+            if managed_by_ccu {
+                "发现 CCU 新版本！".bold()
+            } else {
+                "Update available!".bold()
+            },
             " ".into(),
             format!(
                 "{current} -> {latest}",
@@ -204,40 +222,68 @@ impl WidgetRef for &UpdatePromptScreen {
             .dim(),
         ]));
         column.push("");
-        column.push(
-            Line::from(vec![
-                "Release notes: ".dim(),
-                RELEASE_NOTES_URL.dim().underlined(),
-            ])
-            .inset(Insets::tlbr(0, 2, 0, 0)),
-        );
+        if managed_by_ccu {
+            column.push(Line::from("发行说明：".dim()).inset(Insets::tlbr(0, 2, 0, 0)));
+            column.push(
+                Line::from(release_notes_url.dim().underlined()).inset(Insets::tlbr(0, 2, 0, 0)),
+            );
+        } else {
+            column.push(
+                Line::from(vec![
+                    "Release notes: ".dim(),
+                    release_notes_url.dim().underlined(),
+                ])
+                .inset(Insets::tlbr(0, 2, 0, 0)),
+            );
+        }
         column.push("");
         column.push(selection_option_row(
             0,
-            format!("Update now (runs `{update_command}`)"),
+            if managed_by_ccu {
+                "升级（先在 CCU Manager 确认代理）".to_string()
+            } else {
+                format!("Update now (runs `{update_command}`)")
+            },
             self.highlighted == UpdateSelection::UpdateNow,
         ));
         column.push(selection_option_row(
             1,
-            "Skip".to_string(),
+            if managed_by_ccu {
+                "跳过".to_string()
+            } else {
+                "Skip".to_string()
+            },
             self.highlighted == UpdateSelection::NotNow,
         ));
         column.push(selection_option_row(
             2,
-            "Skip until next version".to_string(),
+            if managed_by_ccu {
+                "跳过此版本".to_string()
+            } else {
+                "Skip until next version".to_string()
+            },
             self.highlighted == UpdateSelection::DontRemind,
         ));
         column.push("");
         column.push(
             Line::from(vec![
-                "Press ".dim(),
+                if managed_by_ccu {
+                    "按 ".dim()
+                } else {
+                    "Press ".dim()
+                },
                 key_hint::plain(KeyCode::Enter).into(),
-                " to continue".dim(),
+                if managed_by_ccu {
+                    " 打开 Manager；确认代理后按 u 开始下载".dim()
+                } else {
+                    " to continue".dim()
+                },
             ])
             .inset(Insets::tlbr(0, 2, 0, 0)),
         );
         column.render(area, buf);
-        crate::terminal_hyperlinks::mark_underlined_hyperlink(buf, area, RELEASE_NOTES_URL);
+        #[cfg(not(test))]
+        crate::terminal_hyperlinks::mark_underlined_hyperlink(buf, area, release_notes_url);
     }
 }
 
@@ -260,6 +306,20 @@ mod tests {
         )
     }
 
+    fn new_ccu_prompt() -> UpdatePromptScreen {
+        UpdatePromptScreen::new(
+            FrameRequester::test_dummy(),
+            "0.1.5".into(),
+            UpdateAction::CcuManager {
+                manager_path: r"C:\ccu\bin\ccu-manager.exe".to_string(),
+                current_version: "0.1.4".to_string(),
+                target_version: "0.1.5".to_string(),
+                release_url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.5"
+                    .to_string(),
+            },
+        )
+    }
+
     #[test]
     fn update_prompt_snapshot() {
         let screen = new_prompt();
@@ -268,6 +328,16 @@ mod tests {
             .draw(|frame| frame.render_widget_ref(&screen, frame.area()))
             .expect("render update prompt");
         insta::assert_snapshot!("update_prompt_modal", terminal.backend());
+    }
+
+    #[test]
+    fn ccu_update_prompt_snapshot() {
+        let screen = new_ccu_prompt();
+        let mut terminal = Terminal::new(VT100Backend::new(88, 12)).expect("terminal");
+        terminal
+            .draw(|frame| frame.render_widget_ref(&screen, frame.area()))
+            .expect("render CCU update prompt");
+        insta::assert_snapshot!("ccu_update_prompt_modal", terminal.backend());
     }
 
     #[test]

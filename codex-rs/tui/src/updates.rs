@@ -1,5 +1,7 @@
-#![cfg(not(debug_assertions))]
+#![cfg(any(not(debug_assertions), test))]
+#![cfg_attr(test, allow(dead_code))]
 
+use crate::ccu_update;
 use crate::legacy_core::config::Config;
 use crate::npm_registry;
 use crate::npm_registry::NpmPackageInfo;
@@ -22,10 +24,16 @@ use std::path::Path;
 
 use crate::version::CODEX_CLI_VERSION;
 
-pub(crate) use crate::updates_cache::dismiss_version;
-
 pub fn get_upgrade_version(config: &Config) -> Option<String> {
-    if !config.check_for_update_on_startup || is_source_build_version(CODEX_CLI_VERSION) {
+    if !config.check_for_update_on_startup {
+        return None;
+    }
+    if ccu_update::is_managed_environment() {
+        return ccu_update::current_update()
+            .filter(ccu_update::ManagedUpdate::should_prompt)
+            .map(|update| update.latest_version);
+    }
+    if is_source_build_version(CODEX_CLI_VERSION) {
         return None;
     }
 
@@ -82,6 +90,9 @@ async fn check_for_update(
     )
     .with_legacy_custom_ca_fallback();
     let latest_version = match action {
+        Some(UpdateAction::CcuManager { .. }) => {
+            anyhow::bail!("CCU Manager owns update checks for managed builds")
+        }
         Some(UpdateAction::BrewUpgrade) => {
             let HomebrewCaskInfo { version } = client_pool
                 .get(HOMEBREW_CASK_API_URL)
@@ -149,7 +160,13 @@ async fn fetch_latest_github_release_version(
 /// Returns the latest version to show in a popup, if it should be shown.
 /// This respects the user's dismissal choice for the current latest version.
 pub fn get_upgrade_version_for_popup(config: &Config) -> Option<String> {
-    if !config.check_for_update_on_startup || is_source_build_version(CODEX_CLI_VERSION) {
+    if !config.check_for_update_on_startup {
+        return None;
+    }
+    if ccu_update::is_managed_environment() {
+        return get_upgrade_version(config);
+    }
+    if is_source_build_version(CODEX_CLI_VERSION) {
         return None;
     }
 
@@ -162,4 +179,12 @@ pub fn get_upgrade_version_for_popup(config: &Config) -> Option<String> {
         return None;
     }
     Some(latest)
+}
+
+pub(crate) async fn dismiss_version(config: &Config, version: &str) -> anyhow::Result<()> {
+    if ccu_update::is_managed_environment() {
+        ccu_update::dismiss_version(version).await
+    } else {
+        crate::updates_cache::dismiss_version(config, version).await
+    }
 }

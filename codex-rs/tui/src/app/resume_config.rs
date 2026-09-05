@@ -90,9 +90,14 @@ impl App {
         {
             Ok(cfg) => cfg,
             Err(err) => {
-                self.chat_widget.add_error_message(format!(
-                    "Failed to rebuild configuration for resume: {err}"
-                ));
+                let error = err.to_string();
+                self.chat_widget
+                    .add_error_message(crate::i18n::global().text_with_string_arg(
+                        "resume-config-rebuild-failed",
+                        "error",
+                        error.clone(),
+                        || format!("Failed to rebuild configuration for resume: {error}"),
+                    ));
                 return Err(AppRunControl::Continue);
             }
         };
