@@ -1,8 +1,9 @@
-use crate::update_versions::is_newer;
 use serde::Deserialize;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
+
+use crate::version::CODEX_CLI_VERSION;
 
 #[cfg_attr(test, allow(dead_code))]
 #[cfg(any(not(debug_assertions), test))]
@@ -26,6 +27,8 @@ pub(crate) struct ManagedUpdate {
     pub(crate) current_version: String,
     pub(crate) latest_version: String,
     pub(crate) release_url: String,
+    bundled_fork_version: Option<String>,
+    current_fork_version: String,
     dismissals_directory: PathBuf,
 }
 
@@ -35,6 +38,8 @@ struct UpdateCache {
     latest_ccu_version: String,
     package_ready: bool,
     release_url: Option<String>,
+    #[serde(default)]
+    bundled_fork_version: Option<String>,
 }
 
 #[cfg_attr(test, allow(dead_code))]
@@ -60,6 +65,7 @@ pub(crate) fn current_update() -> Option<ManagedUpdate> {
     parse_update(
         manager_path,
         current_version,
+        CODEX_CLI_VERSION.to_string(),
         dismissals_directory,
         &cache_source,
     )
@@ -68,13 +74,14 @@ pub(crate) fn current_update() -> Option<ManagedUpdate> {
 fn parse_update(
     manager_path: PathBuf,
     current_version: String,
+    current_fork_version: String,
     dismissals_directory: PathBuf,
     cache_source: &str,
 ) -> Option<ManagedUpdate> {
     let cache: UpdateCache = serde_json::from_str(cache_source).ok()?;
     if !cache.package_ready
-        || !is_stable_version(&current_version)
-        || !is_stable_version(&cache.latest_ccu_version)
+        || !is_ccu_version(&current_version)
+        || !is_ccu_version(&cache.latest_ccu_version)
     {
         return None;
     }
@@ -92,13 +99,20 @@ fn parse_update(
         current_version,
         latest_version: cache.latest_ccu_version,
         release_url,
+        bundled_fork_version: cache.bundled_fork_version,
+        current_fork_version,
         dismissals_directory,
     })
 }
 
 impl ManagedUpdate {
     pub(crate) fn should_prompt(&self) -> bool {
-        is_newer(&self.latest_version, &self.current_version).unwrap_or(false)
+        (is_newer_ccu_version(&self.latest_version, &self.current_version)
+            || self
+                .bundled_fork_version
+                .as_deref()
+                .and_then(|latest| compare_fork_versions(latest, &self.current_fork_version))
+                .is_some_and(|comparison| comparison > 0))
             && !self.dismissal_path().is_file()
     }
 
@@ -111,8 +125,8 @@ impl ManagedUpdate {
 #[cfg_attr(test, allow(dead_code))]
 #[cfg(any(not(debug_assertions), test))]
 pub(crate) async fn dismiss_version(version: &str) -> anyhow::Result<()> {
-    if !is_stable_version(version) {
-        anyhow::bail!("CCU update version must use x.y.z format");
+    if !is_ccu_version(version) {
+        anyhow::bail!("CCU update version must use x.y.z or x.y.z-alpha.N format");
     }
     let directory = PathBuf::from(
         std::env::var_os(UPDATE_DISMISSALS_DIR_ENV)
@@ -136,13 +150,69 @@ async fn dismiss_at(directory: &Path, version: &str) -> anyhow::Result<()> {
     }
 }
 
-fn is_stable_version(version: &str) -> bool {
-    let mut components = version.split('.');
-    (0..3).all(|_| {
-        components.next().is_some_and(|value| {
-            !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
-        })
-    }) && components.next().is_none()
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ParsedCcuVersion {
+    major: u64,
+    minor: u64,
+    patch: u64,
+    alpha: Option<u64>,
+}
+
+fn parse_ccu_version(version: &str) -> Option<ParsedCcuVersion> {
+    let (core, alpha) = version
+        .split_once("-alpha.")
+        .map_or((version, None), |(core, value)| {
+            (core, value.parse::<u64>().ok().filter(|value| *value > 0))
+        });
+    let mut components = core.split('.');
+    let parsed = ParsedCcuVersion {
+        major: components.next()?.parse().ok()?,
+        minor: components.next()?.parse().ok()?,
+        patch: components.next()?.parse().ok()?,
+        alpha,
+    };
+    (components.next().is_none() && (alpha.is_some() || !version.contains("-"))).then_some(parsed)
+}
+
+fn is_ccu_version(version: &str) -> bool {
+    parse_ccu_version(version).is_some()
+}
+
+fn is_newer_ccu_version(latest: &str, current: &str) -> bool {
+    match (parse_ccu_version(latest), parse_ccu_version(current)) {
+        (Some(latest), Some(current)) => {
+            compare_ccu_versions(latest, current) == std::cmp::Ordering::Greater
+        }
+        _ => false,
+    }
+}
+
+fn compare_ccu_versions(left: ParsedCcuVersion, right: ParsedCcuVersion) -> std::cmp::Ordering {
+    let core = (left.major, left.minor, left.patch).cmp(&(right.major, right.minor, right.patch));
+    if core != std::cmp::Ordering::Equal {
+        return core;
+    }
+    match (left.alpha, right.alpha) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (Some(left), Some(right)) => left.cmp(&right),
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (Some(_), None) => std::cmp::Ordering::Less,
+    }
+}
+
+fn parse_fork_version(version: &str) -> Option<(u64, u64, u64)> {
+    let core = version.split_once('-').map_or(version, |(core, _)| core);
+    let mut components = core.split('.');
+    let parsed = (
+        components.next()?.parse().ok()?,
+        components.next()?.parse().ok()?,
+        components.next()?.parse().ok()?,
+    );
+    components.next().is_none().then_some(parsed)
+}
+
+fn compare_fork_versions(latest: &str, current: &str) -> Option<std::cmp::Ordering> {
+    Some(parse_fork_version(latest)?.cmp(&parse_fork_version(current)?))
 }
 
 #[cfg(test)]

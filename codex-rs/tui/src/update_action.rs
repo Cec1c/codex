@@ -10,7 +10,7 @@ use codex_install_context::StandalonePlatform;
 /// Update action the CLI should perform after the TUI exits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateAction {
-    /// Open CCU Manager with the selected target so the user can review network settings.
+    /// Open the CCU quick updater with the selected target so the user can review network settings.
     CcuManager {
         manager_path: String,
         current_version: String,
@@ -55,15 +55,25 @@ impl UpdateAction {
         match self {
             UpdateAction::CcuManager {
                 manager_path,
+                current_version,
                 target_version,
                 ..
             } => (
                 manager_path.clone(),
-                vec![
-                    "--upgrade".to_string(),
-                    "--target".to_string(),
-                    target_version.clone(),
-                ],
+                if supports_quick_updater(current_version) {
+                    vec![
+                        "upgrade".to_string(),
+                        "quick".to_string(),
+                        "--target".to_string(),
+                        target_version.clone(),
+                    ]
+                } else {
+                    vec![
+                        "--upgrade".to_string(),
+                        "--target".to_string(),
+                        target_version.clone(),
+                    ]
+                },
             ),
             UpdateAction::NpmGlobalLatest => (
                 "npm".to_string(),
@@ -133,6 +143,16 @@ impl UpdateAction {
             .unwrap_or_else(|_| format!("{command} {}", args.join(" ")))
     }
 
+    pub fn uses_quick_updater(&self) -> bool {
+        matches!(
+            self,
+            UpdateAction::CcuManager {
+                current_version,
+                ..
+            } if supports_quick_updater(current_version)
+        )
+    }
+
     pub(crate) fn ccu_prompt_details(&self) -> Option<(&str, &str)> {
         match self {
             UpdateAction::CcuManager {
@@ -149,6 +169,34 @@ impl UpdateAction {
             | UpdateAction::StandaloneWindows => None,
         }
     }
+}
+
+fn supports_quick_updater(version: &str) -> bool {
+    let (core, prerelease) = version.split_once('-').unwrap_or((version, ""));
+    let mut components = core.split('.');
+    let (Some(major), Some(minor), Some(patch)) = (
+        components
+            .next()
+            .and_then(|value| value.parse::<u64>().ok()),
+        components
+            .next()
+            .and_then(|value| value.parse::<u64>().ok()),
+        components
+            .next()
+            .and_then(|value| value.parse::<u64>().ok()),
+    ) else {
+        return false;
+    };
+    if components.next().is_some() || major > 0 || minor > 2 {
+        return major > 0 || minor > 2;
+    }
+    if minor < 2 || patch > 0 || prerelease.is_empty() {
+        return minor >= 2;
+    }
+    prerelease
+        .strip_prefix("alpha.")
+        .and_then(|value| value.parse::<u64>().ok())
+        .is_some_and(|value| value >= 3)
 }
 
 #[cfg_attr(test, allow(dead_code))]
@@ -284,5 +332,30 @@ mod tests {
                 ],
             )
         );
+    }
+
+    #[test]
+    fn alpha_ccu_manager_update_uses_the_quick_updater() {
+        let action = UpdateAction::CcuManager {
+            manager_path: r"C:\ccu\bin\ccu-manager.exe".to_string(),
+            current_version: "0.2.0-alpha.4".to_string(),
+            target_version: "0.1.23".to_string(),
+            release_url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.23"
+                .to_string(),
+        };
+
+        assert_eq!(
+            action.command_args(),
+            (
+                r"C:\ccu\bin\ccu-manager.exe".to_string(),
+                vec![
+                    "upgrade".to_string(),
+                    "quick".to_string(),
+                    "--target".to_string(),
+                    "0.1.23".to_string(),
+                ],
+            )
+        );
+        assert!(action.uses_quick_updater());
     }
 }

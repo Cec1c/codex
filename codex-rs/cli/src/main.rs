@@ -821,7 +821,9 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     println!();
     let cmd_str = action.command_str();
     let ccu_managed = matches!(&action, UpdateAction::CcuManager { .. });
-    if ccu_managed {
+    if action.uses_quick_updater() {
+        println!("Opening CCU quick updater via `{cmd_str}`...");
+    } else if ccu_managed {
         println!("Opening CCU Manager via `{cmd_str}`...");
     } else {
         println!("Updating Codex via `{cmd_str}`...");
