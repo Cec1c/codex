@@ -273,6 +273,23 @@ jobs:
                     conflict_paths: $conflict_paths
                   }'
               )"
+              conflict_fingerprint="$(
+                jq -nc \
+                  --arg upstream_tag "$upstream_tag" \
+                  --arg upstream_commit "$upstream_commit" \
+                  --arg revision "$revision" \
+                  --arg patch_commit "$patch_commit" \
+                  --arg failed_commit "$commit" \
+                  --argjson conflict_paths "$conflict_paths_json" \
+                  '{
+                    upstream_tag: $upstream_tag,
+                    upstream_commit: $upstream_commit,
+                    revision: ($revision | tonumber),
+                    patch_commit: $patch_commit,
+                    failed_commit: $failed_commit,
+                    conflict_paths: $conflict_paths
+                  }'
+              )"
 
               gh label create ccu-sync-conflict \
                 --repo "$GITHUB_REPOSITORY" \
@@ -302,6 +319,7 @@ jobs:
 
               {
                 echo "<!-- ccu-sync-metadata:$metadata -->"
+                echo "<!-- ccu-sync-conflict-fingerprint:$conflict_fingerprint -->"
                 echo
                 echo "Automatic replay of fork commit \`$commit\` onto \`$upstream_tag\` failed."
                 echo
@@ -339,12 +357,16 @@ jobs:
                   gh issue view "$issue_number" --repo "$GITHUB_REPOSITORY" \
                     --json body --jq .body
                 )"
-                if grep -Fq -- "<!-- ccu-sync-metadata:$metadata -->" <<<"$existing_body"; then
+                if grep -Fq -- \
+                  "<!-- ccu-sync-conflict-fingerprint:$conflict_fingerprint -->" \
+                  <<<"$existing_body"
+                then
                   unchanged_conflict=true
+                else
+                  gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                    --body-file "$body_file" \
+                    --add-label ccu-sync-conflict
                 fi
-                gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
-                  --body-file "$body_file" \
-                  --add-label ccu-sync-conflict
               fi
 
               remote_base_commit="$(

@@ -88,6 +88,9 @@ steps:
         '{issue: $issue, metadata: $metadata}' \
         > /tmp/gh-aw/agent/ccu-conflict.json
 safe-outputs:
+  report-failure-as-issue: false
+  # The ccu-sync issue is the canonical tracker; gh-aw's generic failure issue
+  # adds a misleading fork/secrets hint for the expected resolver failures.
   create-pull-request:
     title-prefix: "[CCU agent] "
     labels: [ccu-agent-resolution]
@@ -197,5 +200,7 @@ sandbox:
    - `revision = metadata.revision` 的字符串形式
    - `patch_ref = metadata.patch_ref`
    - `prepared_ref = metadata.release_branch`
+   - `alpha = false`
+   - `alpha_sequence = "1"`
 
 原有 Release workflow 会重新验证 prepared ref、编译、打包、发布，并在成功后关闭冲突 Issue 和审计 PR。若任何合同或测试无法满足，只评论阻塞证据；不得创建貌似成功的 PR，也不得调度 Release。
