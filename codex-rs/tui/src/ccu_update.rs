@@ -112,7 +112,7 @@ impl ManagedUpdate {
                 .bundled_fork_version
                 .as_deref()
                 .and_then(|latest| compare_fork_versions(latest, &self.current_fork_version))
-                .is_some_and(|comparison| comparison > 0))
+                .is_some_and(|comparison| comparison == std::cmp::Ordering::Greater))
             && !self.dismissal_path().is_file()
     }
 
