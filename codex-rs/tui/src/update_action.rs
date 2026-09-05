@@ -62,8 +62,7 @@ impl UpdateAction {
                 manager_path.clone(),
                 if supports_quick_updater(current_version) {
                     vec![
-                        "upgrade".to_string(),
-                        "quick".to_string(),
+                        "--upgrade".to_string(),
                         "--target".to_string(),
                         target_version.clone(),
                     ]
@@ -349,8 +348,7 @@ mod tests {
             (
                 r"C:\ccu\bin\ccu-manager.exe".to_string(),
                 vec![
-                    "upgrade".to_string(),
-                    "quick".to_string(),
+                    "--upgrade".to_string(),
                     "--target".to_string(),
                     "0.1.23".to_string(),
                 ],
