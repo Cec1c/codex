@@ -70,6 +70,7 @@ steps:
         (.upstream_tag | test("^rust-v[0-9]+\\.[0-9]+\\.[0-9]+$")) and
         (.upstream_commit | test("^[0-9a-f]{40}$")) and
         (.upstream_main_commit | test("^[0-9a-f]{40}$")) and
+        ((.patch_base_commit // .upstream_main_commit) | test("^[0-9a-f]{40}$")) and
         (.revision | type == "number" and . >= 1) and
         (.release_tag | test("^ccu-rust-v[0-9]+\\.[0-9]+\\.[0-9]+-r[1-9][0-9]*$")) and
         (.release_branch | test("^ccu/release/[0-9]+\\.[0-9]+\\.[0-9]+-r[1-9][0-9]*$")) and
@@ -181,7 +182,7 @@ sandbox:
 
 1. 添加/更新 `upstream=https://github.com/openai/codex.git`，获取 upstream main、指定 tag、origin patch ref 和 agent base branch。
 2. 从 `origin/<agent_base_branch>` 建立临时工作分支。
-3. 使用与确定性 CI 相同的冻结集合和顺序：`git rev-list --reverse --no-merges <upstream_main_commit>..<patch_commit>`，逐个 cherry-pick。只在发生真实冲突时做语义修复；不要顺手重构无关代码。
+3. 使用与确定性 CI 相同的冻结集合和顺序：如果元数据包含 `patch_base_commit`，验证它是 40 位 SHA 并从 origin/upstream 获取该提交，再运行 `git rev-list --reverse --no-merges <patch_base_commit>..<patch_commit>`；旧 Issue 缺少此字段时才回退到 `upstream_main_commit`。发布标签的补丁范围必须从该版本的 upstream tag 开始，不能再次回放上游独立发布分支上的 hotfix。逐个 cherry-pick，只在发生真实冲突时做语义修复；不要顺手重构无关代码。
 4. 遵守仓库根 `AGENTS.md`。完成源码修复后在 `codex-rs` 运行 `just fmt`，并至少运行 i18n、主题、状态栏、footer、session header 的定向测试以及 `cargo check -p codex-cli --locked`。若某项因 runner 环境不能执行，在 Issue 评论和 PR 正文中明确列出，不能伪称通过。
 5. 为降低供应链面，最终发布分支必须是从 agent base 压成的线性、可审计补丁，只允许净修改：
    - `codex-rs/**`

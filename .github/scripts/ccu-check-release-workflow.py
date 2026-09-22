@@ -72,6 +72,24 @@ def main() -> None:
             "conflict deduplication must not compare the full diagnostic metadata"
         )
 
+    if "PATCH_REF: ${{ inputs.patch_ref }}" not in workflow:
+        raise SystemExit("automatic releases must select the published patch baseline")
+    source_markers = [
+        'published_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"',
+        'PATCH_REF="refs/tags/$published_tag"',
+        'patch_base_tag="rust-v${BASH_REMATCH[2]}"',
+        'python3 .github/scripts/ccu-release-patch-range.py "$patch_base_commit" "$patch_commit"',
+        'patch_base_commit: $patch_base_commit',
+    ]
+    if any(marker not in workflow for marker in source_markers):
+        raise SystemExit("published patches must be validated against their exact upstream tag")
+    duplicate_block = workflow.split(
+        'if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$unchanged_conflict" == "true" ]]; then',
+        1,
+    )[1].split("\n              fi", 1)[0]
+    if "::error::" not in duplicate_block or "exit 1" not in duplicate_block:
+        raise SystemExit("unresolved release conflicts must fail even when dispatch is deduplicated")
+
     required_markers = [
         'gh issue comment "$issue_number"',
         "The workflow token could not create",

@@ -14,7 +14,7 @@ on:
         required: false
         type: string
       patch_ref:
-        description: Fork branch containing the CCU i18n commits
+        description: Optional patch branch or release tag; defaults to the latest published stable fork
         required: false
         type: string
       prepared_ref:
@@ -87,7 +87,7 @@ jobs:
           GH_TOKEN: ${{ steps.mirror-maiden-app-token.outputs.token || github.token }}
           REQUESTED_TAG: ${{ inputs.upstream_tag }}
           REQUESTED_REVISION: ${{ inputs.revision }}
-          PATCH_REF: ${{ inputs.patch_ref || github.event.repository.default_branch }}
+          PATCH_REF: ${{ inputs.patch_ref }}
           PREPARED_REF: ${{ inputs.prepared_ref }}
           REQUESTED_ALPHA: ${{ inputs.alpha && 'true' || 'false' }}
           REQUESTED_ALPHA_SEQUENCE: ${{ inputs.alpha_sequence || '1' }}
@@ -123,10 +123,10 @@ jobs:
             echo "Revision must be a positive integer" >&2
             exit 1
           }
-          git check-ref-format --branch "$PATCH_REF" >/dev/null || {
+          if [[ -n "$PATCH_REF" ]] && ! git check-ref-format --branch "$PATCH_REF" >/dev/null; then
             echo "Patch ref must be a valid branch name" >&2
             exit 1
-          }
+          fi
 
           alpha="$REQUESTED_ALPHA"
           [[ "$alpha" == "true" || "$alpha" == "false" ]] || {
@@ -212,13 +212,31 @@ jobs:
             exit 0
           fi
 
+          if [[ -z "$PATCH_REF" ]]; then
+            published_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+            [[ "$published_tag" =~ ^ccu-rust-v[0-9]+\.[0-9]+\.[0-9]+-r[1-9][0-9]*$ ]] || {
+              echo "Latest fork release is not a supported stable CCU tag: $published_tag" >&2
+              exit 1
+            }
+            PATCH_REF="refs/tags/$published_tag"
+            echo "Using published patch baseline $PATCH_REF."
+          fi
           git fetch --no-tags origin "$PATCH_REF:refs/remotes/origin/ccu-patch-source"
           patch_commit="$(git rev-parse refs/remotes/origin/ccu-patch-source)"
 
-          mapfile -t patch_commits < <(
-            git rev-list --reverse --no-merges \
-              "upstream/main..refs/remotes/origin/ccu-patch-source"
-          )
+          patch_base_commit="$upstream_main_commit"
+          if [[ "$PATCH_REF" =~ ^(refs/tags/)?ccu-rust-v([0-9]+\.[0-9]+\.[0-9]+)-r[1-9][0-9]*(-alpha\.[1-9][0-9]*)?$ ]]; then
+            patch_base_tag="rust-v${BASH_REMATCH[2]}"
+            git fetch --no-tags upstream "refs/tags/$patch_base_tag:refs/tags/$patch_base_tag"
+            patch_base_commit="$(git rev-list -n 1 "$patch_base_tag")"
+            patch_commits_text="$(python3 .github/scripts/ccu-release-patch-range.py "$patch_base_commit" "$patch_commit")"
+          else
+            patch_commits_text="$(git rev-list --reverse --no-merges "$patch_base_commit..$patch_commit")"
+          fi
+          patch_commits=()
+          if [[ -n "$patch_commits_text" ]]; then
+            mapfile -t patch_commits <<<"$patch_commits_text"
+          fi
           if [[ "${#patch_commits[@]}" -eq 0 ]]; then
             echo "No fork-only commits were found on $PATCH_REF" >&2
             exit 1
@@ -249,6 +267,7 @@ jobs:
                   --arg upstream_tag "$upstream_tag" \
                   --arg upstream_commit "$upstream_commit" \
                   --arg upstream_main_commit "$upstream_main_commit" \
+                  --arg patch_base_commit "$patch_base_commit" \
                   --arg revision "$revision" \
                   --arg release_tag "$release_tag" \
                   --arg release_branch "$release_branch" \
@@ -263,6 +282,7 @@ jobs:
                     upstream_tag: $upstream_tag,
                     upstream_commit: $upstream_commit,
                     upstream_main_commit: $upstream_main_commit,
+                    patch_base_commit: $patch_base_commit,
                     revision: ($revision | tonumber),
                     release_tag: $release_tag,
                     release_branch: $release_branch,
@@ -388,8 +408,9 @@ jobs:
               fi
 
               if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$unchanged_conflict" == "true" ]]; then
-                echo "::warning::Conflict issue #$issue_number already tracks this exact release state; skipping duplicate resolver dispatch."
-                exit 0
+                echo "::error::Release is blocked by conflict issue #$issue_number; skipping duplicate resolver dispatch."
+                echo "Release $release_tag remains blocked by issue #$issue_number. No build or publication occurred." >> "$GITHUB_STEP_SUMMARY"
+                exit 1
               fi
 
               gh workflow run ccu-conflict-resolver.lock.yml \

@@ -3,7 +3,8 @@ name: CCU i18n CI
 on:
   pull_request:
     paths:
-      - ".github/scripts/ccu-package-release.ps1"
+      - ".github/scripts/ccu-*"
+      - ".github/scripts/test_ccu_*"
       - ".github/workflows/ccu-i18n-*.yml"
       - "codex-rs/tui/**"
       - "docs/ccu/**"
@@ -11,7 +12,8 @@ on:
     branches:
       - main
     paths:
-      - ".github/scripts/ccu-package-release.ps1"
+      - ".github/scripts/ccu-*"
+      - ".github/scripts/test_ccu_*"
       - ".github/workflows/ccu-i18n-*.yml"
       - "codex-rs/tui/**"
       - "docs/ccu/**"
@@ -47,6 +49,9 @@ jobs:
 
       - name: Verify conflict handoff ordering
         run: python3 .github/scripts/ccu-check-release-workflow.py
+
+      - name: Verify published patch selection
+        run: python3 -m unittest discover -s .github/scripts -p 'test_ccu_release_patch_range.py'
 
       - name: Verify CCU TUI contract
         working-directory: codex-rs
