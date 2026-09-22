@@ -1,5 +1,6 @@
 //! Named permission choices from the server catalog, using the existing selection actions.
 
+use super::permission_i18n;
 use super::*;
 use crate::permission_discovery::PermissionDiscovery;
 use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
@@ -57,7 +58,12 @@ impl ChatWidget {
                     &preset.active_permission_profile.id,
                     &preset.permission_profile,
                 ))
-                .then(|| "Disabled by requirements.".to_string())
+                .then(|| {
+                    permission_i18n::text(
+                        "permissions-disabled-by-requirements",
+                        "Disabled by requirements.",
+                    )
+                })
             })
     }
 
@@ -86,24 +92,20 @@ impl ChatWidget {
             );
             return;
         };
-        let mut items = vec![
-            self.builtin_permission_mode_selection_item(
-                &discovery,
-                default,
-                ":workspace",
-                default
-                    .description
-                    .replace(" (Identical to Agent mode)", ""),
-                AskForApproval::from(default.approval),
-                ApprovalsReviewer::User,
-            ),
-        ];
+        let mut items = vec![self.builtin_permission_mode_selection_item(
+            &discovery,
+            default,
+            ":workspace",
+            permission_i18n::preset_description(default),
+            AskForApproval::from(default.approval),
+            ApprovalsReviewer::User,
+        )];
         if self.config.features.enabled(Feature::GuardianApproval) {
             items.push(self.builtin_permission_mode_selection_item(
                 &discovery,
                 default,
                 ":workspace",
-                AUTO_REVIEW_DESCRIPTION.to_string(),
+                permission_i18n::auto_review_description(),
                 AskForApproval::OnRequest,
                 ApprovalsReviewer::AutoReview,
             ));
@@ -112,7 +114,7 @@ impl ChatWidget {
             &discovery,
             full_access,
             BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS,
-            full_access.description.to_string(),
+            permission_i18n::preset_description(full_access),
             AskForApproval::from(full_access.approval),
             ApprovalsReviewer::User,
         ));
@@ -120,7 +122,7 @@ impl ChatWidget {
             &discovery,
             read_only,
             ":read-only",
-            read_only.description.to_string(),
+            permission_i18n::preset_description(read_only),
             AskForApproval::from(read_only.approval),
             ApprovalsReviewer::User,
         ));
@@ -130,13 +132,16 @@ impl ChatWidget {
                 .iter()
                 .filter(|profile| !profile.id.starts_with(':'))
                 .map(|profile| {
+                    let description = profile.description.clone().unwrap_or_else(|| {
+                        permission_i18n::text(
+                            "permissions-configured-profile-description",
+                            "Configured permission profile.",
+                        )
+                    });
                     Self::permission_profile_selection_item(
                         &profile.id,
                         &profile.id,
-                        profile
-                            .description
-                            .as_deref()
-                            .unwrap_or("Configured permission profile."),
+                        &description,
                         active_profile_id.as_deref(),
                         discovery.disabled_reason(
                             &profile.id,
@@ -168,7 +173,10 @@ impl ChatWidget {
                 .profiles
                 .is_empty()
                 .then(|| "No permission profiles returned by the server.".to_string()),
-            title: Some("Update Model Permissions".to_string()),
+            title: Some(permission_i18n::text(
+                "permissions-picker-title",
+                "Update Model Permissions",
+            )),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             header: Box::new(()),
@@ -186,9 +194,9 @@ impl ChatWidget {
         approvals_reviewer: ApprovalsReviewer,
     ) -> SelectionItem {
         let label = match (preset.id, approvals_reviewer) {
-            ("auto", ApprovalsReviewer::AutoReview) => APPROVE_FOR_ME_LABEL,
-            ("auto", ApprovalsReviewer::User) => ASK_FOR_APPROVAL_LABEL,
-            _ => preset.label,
+            ("auto", ApprovalsReviewer::AutoReview) => permission_i18n::approve_for_me_label(),
+            ("auto", ApprovalsReviewer::User) => permission_i18n::ask_for_approval_label(),
+            _ => permission_i18n::preset_label(preset),
         };
         let active_profile_id = self
             .config
@@ -203,17 +211,17 @@ impl ChatWidget {
             profile_id,
             approval_policy: Some(approval_policy),
             approvals_reviewer: Some(approvals_reviewer),
-            display_label: label.to_string(),
+            display_label: label.clone(),
         };
         SelectionItem {
-            name: label.to_string(),
+            name: label.clone(),
             description: Some(description),
             is_current: active_profile_id.as_deref() == Some(id)
                 && current_approval == approval_policy
                 && current_reviewer == approvals_reviewer,
             actions: self.permission_mode_actions(
                 preset,
-                label.to_string(),
+                label,
                 approvals_reviewer,
                 Some(selection),
                 /*return_to_permissions*/ true,

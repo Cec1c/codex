@@ -19,6 +19,10 @@ const BASE_CLI_BUG_ISSUE_URL: &str =
 /// Internal routing link for employee feedback follow-ups. This must not be shown to external users.
 const CODEX_FEEDBACK_INTERNAL_URL: &str = "http://go/codex-feedback-internal";
 
+fn feedback_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 /// The target audience for feedback disclosure and follow-up instructions.
 ///
 /// This controls displayed copy and links, not feedback upload behavior.
@@ -52,17 +56,35 @@ pub(crate) fn feedback_success_cell(
     feedback_audience: FeedbackAudience,
 ) -> history_cell::WebHyperlinkHistoryCell {
     let prefix = if include_logs {
-        "• Feedback uploaded."
+        feedback_text("feedback-success-uploaded", "• Feedback uploaded.")
     } else {
-        "• Feedback recorded (no logs)."
+        feedback_text(
+            "feedback-success-recorded-no-logs",
+            "• Feedback recorded (no logs).",
+        )
     };
     let issue_url = issue_url_for_category(category, thread_id, feedback_audience);
     let mut lines = vec![Line::from(match issue_url.as_ref() {
         Some(_) if feedback_audience == FeedbackAudience::OpenAiEmployee => {
-            format!("{prefix} You can share this in #codex-feedback:")
+            format!(
+                "{prefix} {}",
+                feedback_text(
+                    "feedback-success-share-internal",
+                    "You can share this in #codex-feedback:",
+                )
+            )
         }
-        Some(_) => format!("{prefix} Please open an issue using the following URL:"),
-        None => format!("{prefix} Thanks for the feedback!"),
+        Some(_) => format!(
+            "{prefix} {}",
+            feedback_text(
+                "feedback-success-open-issue",
+                "Please open an issue using the following URL:",
+            )
+        ),
+        None => format!(
+            "{prefix} {}",
+            feedback_text("feedback-success-thanks", "Thanks for the feedback!")
+        ),
     })];
     match issue_url {
         Some(url) if feedback_audience == FeedbackAudience::OpenAiEmployee => {
@@ -88,16 +110,34 @@ pub(crate) fn feedback_success_cell(
                 Line::from(vec!["  ".into(), url.cyan().underlined()]),
                 "".into(),
                 Line::from(vec![
-                    "  Or mention your thread ID ".into(),
+                    format!(
+                        "  {} ",
+                        feedback_text(
+                            "feedback-success-thread-prefix",
+                            "Or mention your thread ID",
+                        )
+                    )
+                    .into(),
                     thread_id.to_string().bold(),
-                    " in an existing issue.".into(),
+                    format!(
+                        " {}",
+                        feedback_text("feedback-success-thread-suffix", "in an existing issue.",)
+                    )
+                    .into(),
                 ]),
             ]);
         }
         None => {
             lines.extend([
                 "".into(),
-                Line::from(vec!["  Thread ID: ".into(), thread_id.to_string().bold()]),
+                Line::from(vec![
+                    format!(
+                        "  {} ",
+                        feedback_text("feedback-success-thread-id", "Thread ID:")
+                    )
+                    .into(),
+                    thread_id.to_string().bold(),
+                ]),
             ]);
         }
     }
@@ -139,36 +179,51 @@ pub(crate) fn feedback_selection_params(
     app_event_tx: AppEventSender,
 ) -> super::SelectionViewParams {
     super::SelectionViewParams {
-        title: Some("How was this?".to_string()),
+        title: Some(feedback_text("feedback-selection-title", "How was this?")),
         items: vec![
             make_feedback_item(
                 app_event_tx.clone(),
-                "bug",
-                "Crash, error message, hang, or broken UI/behavior.",
+                feedback_text("feedback-category-bug", "bug"),
+                feedback_text(
+                    "feedback-category-bug-description",
+                    "Crash, error message, hang, or broken UI/behavior.",
+                ),
                 FeedbackCategory::Bug,
             ),
             make_feedback_item(
                 app_event_tx.clone(),
-                "bad result",
-                "Output was off-target, incorrect, incomplete, or unhelpful.",
+                feedback_text("feedback-category-bad-result", "bad result"),
+                feedback_text(
+                    "feedback-category-bad-result-description",
+                    "Output was off-target, incorrect, incomplete, or unhelpful.",
+                ),
                 FeedbackCategory::BadResult,
             ),
             make_feedback_item(
                 app_event_tx.clone(),
-                "good result",
-                "Helpful, correct, high‑quality, or delightful result worth celebrating.",
+                feedback_text("feedback-category-good-result", "good result"),
+                feedback_text(
+                    "feedback-category-good-result-description",
+                    "Helpful, correct, high‑quality, or delightful result worth celebrating.",
+                ),
                 FeedbackCategory::GoodResult,
             ),
             make_feedback_item(
                 app_event_tx.clone(),
-                "safety check",
-                "Benign usage blocked due to safety checks or refusals.",
+                feedback_text("feedback-category-safety-check", "safety check"),
+                feedback_text(
+                    "feedback-category-safety-check-description",
+                    "Benign usage blocked due to safety checks or refusals.",
+                ),
                 FeedbackCategory::SafetyCheck,
             ),
             make_feedback_item(
                 app_event_tx,
-                "other",
-                "Slowness, feature suggestion, UX feedback, or anything else.",
+                feedback_text("feedback-category-other", "other"),
+                feedback_text(
+                    "feedback-category-other-description",
+                    "Slowness, feature suggestion, UX feedback, or anything else.",
+                ),
                 FeedbackCategory::Other,
             ),
         ],
@@ -179,11 +234,17 @@ pub(crate) fn feedback_selection_params(
 /// Build the selection popup params shown when feedback is disabled.
 pub(crate) fn feedback_disabled_params() -> super::SelectionViewParams {
     super::SelectionViewParams {
-        title: Some("Sending feedback is disabled".to_string()),
-        subtitle: Some("This action is disabled by configuration.".to_string()),
+        title: Some(feedback_text(
+            "feedback-disabled-title",
+            "Sending feedback is disabled",
+        )),
+        subtitle: Some(feedback_text(
+            "feedback-disabled-subtitle",
+            "This action is disabled by configuration.",
+        )),
         footer_hint: Some(standard_popup_hint_line()),
         items: vec![super::SelectionItem {
-            name: "Close".to_string(),
+            name: feedback_text("feedback-close", "Close"),
             dismiss_on_select: true,
             ..Default::default()
         }],
@@ -193,16 +254,16 @@ pub(crate) fn feedback_disabled_params() -> super::SelectionViewParams {
 
 fn make_feedback_item(
     app_event_tx: AppEventSender,
-    name: &str,
-    description: &str,
+    name: String,
+    description: String,
     category: FeedbackCategory,
 ) -> super::SelectionItem {
     let action: super::SelectionAction = Box::new(move |_sender: &AppEventSender| {
         app_event_tx.send(AppEvent::OpenFeedbackConsent { category });
     });
     super::SelectionItem {
-        name: name.to_string(),
-        description: Some(description.to_string()),
+        name,
+        description: Some(description),
         actions: vec![action],
         dismiss_on_select: true,
         ..Default::default()
@@ -243,9 +304,16 @@ pub(crate) fn feedback_upload_consent_params(
 
     // Build header listing files that would be sent if user consents.
     let mut header_lines: Vec<Box<dyn crate::render::renderable::Renderable>> = vec![
-        Line::from("Upload logs?".bold()).into(),
+        Line::from(feedback_text("feedback-upload-title", "Upload logs?").bold()).into(),
         Line::from("").into(),
-        Line::from("The following files will be sent:".dim()).into(),
+        Line::from(
+            feedback_text(
+                "feedback-upload-files-intro",
+                "The following files will be sent:",
+            )
+            .dim(),
+        )
+        .into(),
         Line::from(vec!["  • ".into(), "codex-logs.log".into()]).into(),
         Line::from(vec![
             "  • ".into(),
@@ -254,12 +322,20 @@ pub(crate) fn feedback_upload_consent_params(
         .into(),
         Line::from(vec![
             "  • ".into(),
-            format!("{CODEX_APPS_TOOLS_CACHE_ATTACHMENT_FILENAME} (if available)").into(),
+            format!(
+                "{CODEX_APPS_TOOLS_CACHE_ATTACHMENT_FILENAME} {}",
+                feedback_text("feedback-if-available", "(if available)")
+            )
+            .into(),
         ])
         .into(),
         Line::from(vec![
             "  • ".into(),
-            format!("{CODEX_APP_DIRECTORY_CACHE_ATTACHMENT_FILENAME} (if available)").into(),
+            format!(
+                "{CODEX_APP_DIRECTORY_CACHE_ATTACHMENT_FILENAME} {}",
+                feedback_text("feedback-if-available", "(if available)")
+            )
+            .into(),
         ])
         .into(),
     ];
@@ -291,7 +367,16 @@ pub(crate) fn feedback_upload_consent_params(
     }
     if should_show_feedback_connectivity_details(category, feedback_diagnostics) {
         header_lines.push(Line::from("").into());
-        header_lines.push(Line::from("Connectivity diagnostics".bold()).into());
+        header_lines.push(
+            Line::from(
+                feedback_text(
+                    "feedback-connectivity-diagnostics",
+                    "Connectivity diagnostics",
+                )
+                .bold(),
+            )
+            .into(),
+        );
         for diagnostic in feedback_diagnostics.diagnostics() {
             header_lines
                 .push(Line::from(vec!["  - ".into(), diagnostic.headline.clone().into()]).into());
@@ -305,17 +390,17 @@ pub(crate) fn feedback_upload_consent_params(
         footer_hint: Some(standard_popup_hint_line()),
         items: vec![
             super::SelectionItem {
-                name: "Yes".to_string(),
-                description: Some(
-                    "Share the current Codex session logs and diagnostics with the team for troubleshooting."
-                        .to_string(),
-                ),
+                name: feedback_text("feedback-yes", "Yes"),
+                description: Some(feedback_text(
+                    "feedback-upload-yes-description",
+                    "Share the current Codex session logs and diagnostics with the team for troubleshooting.",
+                )),
                 actions: vec![yes_action],
                 dismiss_on_select: true,
                 ..Default::default()
             },
             super::SelectionItem {
-                name: "No".to_string(),
+                name: feedback_text("feedback-no", "No"),
                 actions: vec![no_action],
                 dismiss_on_select: true,
                 ..Default::default()

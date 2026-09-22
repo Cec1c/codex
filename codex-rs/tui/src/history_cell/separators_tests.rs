@@ -66,6 +66,19 @@ fn completion_label_includes_date_when_viewed_on_another_day() {
 }
 
 #[test]
+fn localized_duration_preserves_completion_timestamp() {
+    let completed_at = completed_at();
+    let localizer =
+        crate::i18n::Localizer::from_ftl("zh-Hans", "history-worked-for = 工作了 { $duration }\n");
+    let cell = FinalMessageSeparator::new(Some(125), /*runtime_metrics*/ None)
+        .with_completed_at(completed_at);
+    let parts = cell
+        .label_parts_with_localizer(&localizer, completed_at.date_naive())
+        .expect("completion label");
+    insta::assert_snapshot!(parts.join(" · "), @"工作了 2m 5s · done 2:32 PM");
+}
+
+#[test]
 fn completion_uses_twelve_hour_time_at_midnight_noon_and_afternoon() {
     let labels = [0, 12, 15].map(|hour| {
         let completed_at = completed_at().with_hour(hour).expect("valid hour");

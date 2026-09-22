@@ -353,6 +353,7 @@ mod interrupts;
 mod questions;
 use self::interrupts::InterruptManager;
 mod keymap_picker;
+mod language;
 mod mcp_startup;
 use self::mcp_startup::McpStartupStatus;
 mod misalignment_policy;
@@ -384,6 +385,7 @@ mod model_popups;
 mod notifications;
 use self::notifications::Notification;
 mod permission_discovery;
+mod permission_i18n;
 mod permission_popups;
 mod permission_shortcuts;
 mod permissions_menu;
@@ -509,11 +511,14 @@ use unicode_segmentation::UnicodeSegmentation;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
-const ASK_FOR_APPROVAL_LABEL: &str = "Ask for approval";
-const APPROVE_FOR_ME_LABEL: &str = "Approve for me";
-const AUTO_REVIEW_DESCRIPTION: &str = "Only ask for actions detected as potentially unsafe.";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_STATUS_LINE_ITEMS: [&str; 3] = ["model-with-reasoning", "current-dir", "thread-name"];
+const CCU_STATUS_LINE_ITEMS: [&str; 4] = [
+    "model-with-reasoning",
+    "context-tokens",
+    "context-progress",
+    "session-timing",
+];
 
 /// Common initialization parameters shared by all `ChatWidget` constructors.
 pub(crate) struct ChatWidgetInit {
@@ -760,6 +765,8 @@ pub(crate) struct ChatWidget {
     session_network_proxy: Option<SessionNetworkProxyRuntime>,
     // Shared latch so we only warn once about invalid status-line item IDs.
     status_line_invalid_items_warned: Arc<AtomicBool>,
+    // Whether the optional CCU status-line preset was selected at startup.
+    ccu_status_line_preset_enabled: bool,
     // Shared latch so we only warn once about invalid terminal-title item IDs.
     terminal_title_invalid_items_warned: Arc<AtomicBool>,
     // Last terminal title emitted, to avoid writing duplicate OSC updates.
@@ -1486,7 +1493,9 @@ impl ChatWidget {
         self.unified_exec_processes.clear();
         self.sync_unified_exec_footer();
         self.add_info_message(
-            "Stopping all background terminals.".to_string(),
+            crate::i18n::global().text("stop-background-terminals", None, || {
+                "Stopping all background terminals.".to_string()
+            }),
             /*hint*/ None,
         );
     }
@@ -1549,9 +1558,11 @@ impl ChatWidget {
     }
 
     pub(crate) fn add_memories_enable_notice(&mut self) {
-        self.add_to_history(history_cell::new_warning_event(
-            MEMORIES_ENABLE_NOTICE.to_string(),
-        ));
+        self.add_to_history(history_cell::new_warning_event(crate::i18n::global().text(
+            "memories-enable-notice",
+            None,
+            || MEMORIES_ENABLE_NOTICE.to_string(),
+        )));
         self.request_redraw();
     }
 
@@ -2066,8 +2077,40 @@ impl Drop for ChatWidget {
     }
 }
 
-const PLACEHOLDER: &str = "Ask Codex to do anything";
-const SIDE_PLACEHOLDER: &str = "Ask a follow-up question";
+const PLACEHOLDERS: [(&str, &str); 8] = [
+    ("composer-explain-codebase", "Explain this codebase"),
+    ("composer-summarize-commits", "Summarize recent commits"),
+    ("composer-implement-feature", "Implement {feature}"),
+    ("composer-fix-file-bug", "Find and fix a bug in @filename"),
+    ("composer-write-file-tests", "Write tests for @filename"),
+    (
+        "composer-improve-file-docs",
+        "Improve documentation in @filename",
+    ),
+    (
+        "composer-review-current-changes",
+        "Run /review on my current changes",
+    ),
+    (
+        "composer-list-skills",
+        "Use /skills to list available skills",
+    ),
+];
+
+const SIDE_PLACEHOLDERS: [(&str, &str); 3] = [
+    (
+        "composer-side-check-compatibility",
+        "Check recently modified functions for compatibility",
+    ),
+    (
+        "composer-side-count-modified-files",
+        "How many files have been modified?",
+    ),
+    (
+        "composer-side-check-scale",
+        "Will this algorithm scale well?",
+    ),
+];
 
 // Extract the first bold (Markdown) element in the form **...** from `s`.
 // Returns the inner text if found; otherwise `None`.

@@ -1,0 +1,14 @@
+---
+source: tui/src/chatwidget/tests/slash_commands.rs
+expression: popup
+---
+  Select Language
+  Language packs are managed by CCU. Restart Codex after selection.
+
+  Type to search languages
+› English (current)            Built into Codex and always available.
+  Français (fr-FR) (disabled)  fr-FR · test.fr-FR (disabled: Requires i18n API 2..=3;
+                               this Codex build provides 1.)
+  简 体 中 文  (zh-CN)             zh-CN · test.zh-CN
+
+  Press enter to confirm or esc to go back

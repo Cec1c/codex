@@ -5,6 +5,7 @@ use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Local;
 use chrono::NaiveDate;
+use fluent_bundle::FluentArgs;
 
 /// Completion metadata shown after the assistant's final response.
 ///
@@ -49,6 +50,15 @@ impl FinalMessageSeparator {
     }
 
     fn label(&self, today: NaiveDate) -> Option<String> {
+        self.label_parts_with_localizer(crate::i18n::global(), today)
+            .map(|parts| parts.join(" · "))
+    }
+
+    pub(crate) fn label_parts_with_localizer(
+        &self,
+        localizer: &crate::i18n::Localizer,
+        today: NaiveDate,
+    ) -> Option<Vec<String>> {
         let mut label_parts = Vec::new();
         if let Some(elapsed_seconds) = self.elapsed_seconds.filter(|seconds| *seconds > 60) {
             let hours = elapsed_seconds / 3_600;
@@ -61,7 +71,11 @@ impl FinalMessageSeparator {
             } else {
                 format!("{seconds}s")
             };
-            label_parts.push(format!("Worked for {elapsed}"));
+            let mut args = FluentArgs::new();
+            args.set("duration", elapsed.as_str());
+            label_parts.push(localizer.text("history-worked-for", Some(&args), || {
+                format!("Worked for {elapsed}")
+            }));
         }
         if let Some(completed_at) = self.completed_at {
             let format = if completed_at.date_naive() == today {
@@ -76,7 +90,7 @@ impl FinalMessageSeparator {
         if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
             label_parts.push(metrics_label);
         }
-        (!label_parts.is_empty()).then(|| label_parts.join(" · "))
+        (!label_parts.is_empty()).then_some(label_parts)
     }
 }
 impl HistoryCell for FinalMessageSeparator {

@@ -362,8 +362,13 @@ async fn fresh_startup_reads_destination_and_cleared_model_uses_catalog() -> Res
         let (mut app, _, _) = make_test_app_with_channels().await;
         app.chat_widget.handle_thread_session_quiet(started.session);
         if !remote {
-            let rendered = render_bottom_popup(&app.chat_widget, /*width*/ 80)
-                .replace(&destination.path().display().to_string(), "<PROJECT>");
+            let rendered = render_bottom_popup(&app.chat_widget, /*width*/ 80).replace(
+                &crate::status::format_directory_display(
+                    destination.path(),
+                    /*max_width*/ None,
+                ),
+                "<PROJECT>",
+            );
             insta::assert_snapshot!(rendered, @r"
             › Ask Codex to do anything
 

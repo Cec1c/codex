@@ -24,7 +24,7 @@ use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
 use crate::skills_helpers::match_skill;
-use crate::style::user_message_style;
+use crate::style::menu_surface_style;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -33,8 +33,11 @@ use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::render_rows_single_line;
 
-const SEARCH_PLACEHOLDER: &str = "Type to search skills";
 const SEARCH_PROMPT_PREFIX: &str = "> ";
+
+fn skills_toggle_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
 
 pub(crate) struct SkillsToggleItem {
     pub name: String,
@@ -63,9 +66,15 @@ impl SkillsToggleView {
         keymap: ListKeymap,
     ) -> Self {
         let mut header = ColumnRenderable::new();
-        header.push(Line::from("Enable/Disable Skills".bold()));
         header.push(Line::from(
-            "Turn skills on or off. Your changes are saved automatically.".dim(),
+            skills_toggle_text("skills-manage", "Enable/Disable Skills").bold(),
+        ));
+        header.push(Line::from(
+            skills_toggle_text(
+                "skills-toggle-subtitle",
+                "Turn skills on or off. Your changes are saved automatically.",
+            )
+            .dim(),
         ));
 
         let mut view = Self {
@@ -322,7 +331,7 @@ impl Renderable for SkillsToggleView {
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(menu_surface_style())
             .render(content_area, buf);
 
         let header_height = self
@@ -345,7 +354,10 @@ impl Renderable for SkillsToggleView {
         if search_area.height >= 2 {
             let [placeholder_area, input_area] =
                 Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(search_area);
-            Line::from(SEARCH_PLACEHOLDER.dim()).render(placeholder_area, buf);
+            Line::from(
+                skills_toggle_text("skills-search-placeholder", "Type to search skills").dim(),
+            )
+            .render(placeholder_area, buf);
             let line = if self.search_query.is_empty() {
                 Line::from(vec![SEARCH_PROMPT_PREFIX.dim()])
             } else {
@@ -357,7 +369,7 @@ impl Renderable for SkillsToggleView {
             line.render(input_area, buf);
         } else if search_area.height > 0 {
             let query_span = if self.search_query.is_empty() {
-                SEARCH_PLACEHOLDER.dim()
+                skills_toggle_text("skills-search-placeholder", "Type to search skills").dim()
             } else {
                 self.search_query.clone().into()
             };
@@ -377,7 +389,7 @@ impl Renderable for SkillsToggleView {
                 &rows,
                 &self.state,
                 render_area.height as usize,
-                "no matches",
+                &skills_toggle_text("command-popup-no-matches", "no matches"),
             );
         }
 
@@ -400,29 +412,49 @@ fn skills_toggle_hint_line(keymap: &ListKeymap) -> Line<'static> {
 
     match (accept, cancel) {
         (Some(accept), Some(cancel)) => Line::from(vec![
-            "Press ".into(),
+            skills_toggle_text("skills-hint-press", "Press").into(),
+            " ".into(),
             space.into(),
-            " or ".into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-or", "or").into(),
+            " ".into(),
             accept.into(),
-            " to toggle; ".into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-toggle-separator", "to toggle;").into(),
+            " ".into(),
             cancel.into(),
-            " to close".into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-close", "to close").into(),
         ]),
         (Some(accept), None) => Line::from(vec![
-            "Press ".into(),
+            skills_toggle_text("skills-hint-press", "Press").into(),
+            " ".into(),
             space.into(),
-            " or ".into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-or", "or").into(),
+            " ".into(),
             accept.into(),
-            " to toggle".into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-toggle", "to toggle").into(),
         ]),
         (None, Some(cancel)) => Line::from(vec![
-            "Press ".into(),
+            skills_toggle_text("skills-hint-press", "Press").into(),
+            " ".into(),
             space.into(),
-            " to toggle; ".into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-toggle-separator", "to toggle;").into(),
+            " ".into(),
             cancel.into(),
-            " to close".into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-close", "to close").into(),
         ]),
-        (None, None) => Line::from(vec!["Press ".into(), space.into(), " to toggle".into()]),
+        (None, None) => Line::from(vec![
+            skills_toggle_text("skills-hint-press", "Press").into(),
+            " ".into(),
+            space.into(),
+            " ".into(),
+            skills_toggle_text("skills-hint-toggle", "to toggle").into(),
+        ]),
     }
 }
 
