@@ -16,7 +16,7 @@ use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::style::accent_style;
-use crate::style::user_message_style;
+use crate::style::menu_surface_style;
 use crate::width::display_width;
 
 use super::scroll_state::ScrollState;
@@ -110,7 +110,7 @@ pub(crate) fn render_menu_surface(area: Rect, buf: &mut Buffer) -> Rect {
         return area;
     }
     Block::default()
-        .style(user_message_style())
+        .style(menu_surface_style())
         .render(area, buf);
     menu_surface_inset(area)
 }
@@ -157,7 +157,7 @@ fn compute_desc_col(
             let mut spans = row.name_prefix_spans.clone();
             spans.push(row.name.clone().into());
             if row.disabled_reason.is_some() {
-                spans.push(" (disabled)".dim());
+                spans.push(crate::i18n::tr!("picker-disabled-suffix", " (disabled)").dim());
             }
             line_width(&Line::from(spans))
         })

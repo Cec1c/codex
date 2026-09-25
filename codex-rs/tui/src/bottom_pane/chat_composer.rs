@@ -4,6 +4,8 @@
 //! and handles Enter/newlines. It shows Luna Reserve's yellow arrow and detects unbracketed paste
 //! bursts, especially on Windows. Copy shortcuts and right clicks preserve selected draft text.
 //! The live voice strip renders after effort ignition, followed by the Astra sparkle when eligible.
+//! The CCU Claude layout uses a fixed prompt and two rules, hiding decorative ignition and sparkle
+//! effects while preserving the same input, attachment, and voice state machines.
 //! Owned transcripts keep persistent status below the composer and hints on a separate final row.
 //! Shortcut help expands above the composer, with its close hint replacing the final shortcuts row
 //! so input and persistent status stay anchored when help opens or closes.
@@ -275,7 +277,6 @@ use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::key_hint::ShortcutHint;
 use crate::key_hint::has_ctrl_or_alt;
-use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use codex_message_history::HistoryBatchCursor;
 use crossterm::event::KeyCode;
@@ -346,6 +347,7 @@ use super::skill_popup::MentionItem;
 use super::skill_popup::SkillPopup;
 use super::slash_commands::ServiceTierCommand;
 use super::slash_commands::SlashCommandItem;
+use super::status_line_style::fit_status_line_to_width;
 use super::voice_strip::VoiceStrip;
 use crate::history_cell::sanitize_user_text;
 use crate::key_hint::KeyBindingListExt;
@@ -360,6 +362,7 @@ use crate::render::Insets;
 use crate::render::RectExt;
 use crate::render::renderable::Renderable;
 use crate::slash_command::SlashCommand;
+use crate::style::composer_style;
 use crate::style::user_message_style;
 use codex_protocol::ThreadId;
 use codex_protocol::user_input::ByteRange;
@@ -3028,8 +3031,15 @@ impl ChatComposer {
                 .slash_input()
                 .validate_submission(&text, input_starts_with_space)
         {
-            let message = format!(
-                r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+            let message = crate::i18n::global().text_with_string_arg(
+                "slash-unrecognized-command",
+                "name",
+                name.as_str(),
+                || {
+                    format!(
+                        r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+                    )
+                },
             );
             self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
                 history_cell::new_info_event(message, /*hint*/ None),
@@ -4728,9 +4738,9 @@ impl ChatComposer {
                         combined_status_line
                     };
                     let mut truncated_status_line = if status_line_active {
-                        combined_status_line.as_ref().map(|line| {
-                            truncate_line_with_ellipsis_if_overflow(line.clone(), available_width)
-                        })
+                        combined_status_line
+                            .as_ref()
+                            .map(|line| fit_status_line_to_width(line.clone(), available_width))
                     } else {
                         None
                     };
@@ -4786,9 +4796,9 @@ impl ChatComposer {
                     if status_line_active
                         && let Some(max_left) = max_left_width_for_right(hint_rect, right_width)
                         && left_width > max_left
-                        && let Some(line) = combined_status_line.as_ref().map(|line| {
-                            truncate_line_with_ellipsis_if_overflow(line.clone(), max_left as usize)
-                        })
+                        && let Some(line) = combined_status_line
+                            .as_ref()
+                            .map(|line| fit_status_line_to_width(line.clone(), max_left as usize))
                     {
                         left_width = line.width() as u16;
                         truncated_status_line = Some(line);
@@ -4914,8 +4924,11 @@ impl ChatComposer {
         if let Some((warning_area, line)) = warning_notice {
             line.render(warning_area, buf);
         }
-        let style = user_message_style();
+        let style = composer_style();
         Block::default().style(style).render(composer_rect, buf);
+        if let Some(theme) = crate::ccu_theme::active().filter(|theme| theme.claude_layout()) {
+            crate::ccu_welcome::render_composer_rules(composer_rect, buf, theme);
+        }
         if !remote_images_rect.is_empty() {
             Paragraph::new(self.attachments.remote_image_lines())
                 .style(style)
@@ -4925,6 +4938,10 @@ impl ChatComposer {
             let prompt = if self.draft.input_enabled {
                 if self.draft.is_bash_mode {
                     Span::from("!").light_red().bold()
+                } else if crate::ccu_theme::active()
+                    .is_some_and(crate::ccu_theme::CcuTheme::claude_layout)
+                {
+                    "❯".into()
                 } else if self.luna_reserve_active {
                     // Reserve keeps one arrow at every reasoning effort; only its foreground changes.
                     "›"
@@ -5002,6 +5019,7 @@ impl ChatComposer {
             }
         }
         if matches!(self.popups.active, ActivePopup::None)
+            && !crate::ccu_theme::active().is_some_and(crate::ccu_theme::CcuTheme::claude_layout)
             && let Some(ignition) = &self.effort_ignition
             && !ignition.is_finished()
         {
@@ -5024,12 +5042,14 @@ impl ChatComposer {
         }
         drop(state);
         self.render_voice_strip(composer_rect, buf);
-        self.render_sparkle(
-            composer_rect,
-            textarea_rect,
-            self.cursor_pos_with_options(area, options),
-            buf,
-        );
+        if !crate::ccu_theme::active().is_some_and(crate::ccu_theme::CcuTheme::claude_layout) {
+            self.render_sparkle(
+                composer_rect,
+                textarea_rect,
+                self.cursor_pos_with_options(area, options),
+                buf,
+            );
+        }
         if options.footer.is_some_and(|footer| footer.is_interactive) {
             buf.set_style(composer_rect, Style::default().dim());
         }

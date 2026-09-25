@@ -11,7 +11,7 @@ impl ChatWidget {
         let mut choices = Vec::new();
         if let Some(status_targets) = &self.transcript.last_status_copy_targets {
             choices.push((
-                "Whole status".to_string(),
+                crate::i18n::tr!("copy-whole-status", "Whole status").to_string(),
                 Arc::<str>::from(status_targets.handle.copy_text()),
                 CopyFormat::PlainText,
             ));
@@ -29,7 +29,7 @@ impl ChatWidget {
             .filter(|markdown| !markdown.is_empty())
         {
             choices.push((
-                "Whole response".to_string(),
+                crate::i18n::tr!("copy-whole-response", "Whole response").to_string(),
                 Arc::<str>::from(markdown),
                 CopyFormat::Markdown,
             ));
@@ -44,8 +44,14 @@ impl ChatWidget {
                     .filter_map(|target| match target {
                         crate::markdown::CopyTarget::Code { language, content } => Some((
                             language.map_or_else(
-                                || "Code block".to_string(),
-                                |language| format!("{language} code"),
+                                || crate::i18n::tr!("copy-code", "Code block").to_string(),
+                                |language| {
+                                    crate::i18n::tr_format!(
+                                        "copy-language-code",
+                                        "{language} code",
+                                        language = &language
+                                    )
+                                },
                             ),
                             content,
                             CopyFormat::PlainText,
@@ -59,7 +65,7 @@ impl ChatWidget {
                                 .collect();
                             (!content.trim().is_empty()).then(|| {
                                 (
-                                    "Blockquote".to_string(),
+                                    crate::i18n::tr!("copy-quote", "Blockquote").to_string(),
                                     Arc::from(content),
                                     CopyFormat::PlainText,
                                 )
@@ -97,7 +103,7 @@ impl ChatWidget {
             .collect();
 
         self.show_selection_view(SelectionViewParams {
-            title: Some("Copy to clipboard".into()),
+            title: Some(crate::i18n::tr!("copy-title", "Copy to clipboard").into()),
             items,
             ..SelectionViewParams::picker()
         });

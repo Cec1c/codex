@@ -79,6 +79,7 @@ async fn empty_enter_returns_to_latest_with_contextual_hints() -> Result<()> {
     tui.set_owned_screen(/*owned*/ true)?;
     for (width, detailed) in [(80, false), (40, true)] {
         let size = Size::new(width, /*height*/ 12);
+        crate::custom_terminal::test_support::set_screen_size(&mut tui.terminal, size);
         tui.terminal.resize(size)?;
         app.transcript_view = Default::default();
         app.transcript_view

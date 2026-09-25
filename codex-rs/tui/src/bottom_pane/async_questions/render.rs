@@ -96,7 +96,7 @@ impl Renderable for AsyncQuestions {
                 &option_rows,
                 &options_state,
                 option_rows.len().max(1),
-                "No options",
+                crate::i18n::tr!("questions-no-options", "No options"),
             );
         }
 
@@ -195,16 +195,16 @@ impl AsyncQuestions {
         tips.extend(option_tip.map(Line::from));
         if let Some(key) = chat_hint("prompt_stack_back") {
             let label = if self.state.current_idx > 0 {
-                "prev question"
+                crate::i18n::tr!("questions-prev", "prev question")
             } else {
-                "main prompt"
+                crate::i18n::tr!("questions-main-prompt", "main prompt")
             };
             tips.push(crate::footer_hint::shortcut(&key.display_label(), label));
         }
         let next = if self.state.current_idx + 1 < self.state.pending.len() {
-            Some("next question")
+            Some(crate::i18n::tr!("questions-next", "next question"))
         } else if self.has_queued_messages {
-            Some("queued messages")
+            Some(crate::i18n::tr!("questions-queued", "queued messages"))
         } else {
             None
         };
@@ -230,10 +230,11 @@ impl AsyncQuestions {
     }
 
     pub(super) fn option_tip(&self) -> Span<'static> {
-        format!(
-            "option {}/{}",
-            self.selected_option_index().unwrap_or(0) + 1,
-            self.options_len()
+        crate::i18n::tr_format!(
+            "questions-option-index",
+            "option {value}/{value2}",
+            value = self.selected_option_index().unwrap_or(0) + 1,
+            value2 = self.options_len()
         )
         .dim()
     }

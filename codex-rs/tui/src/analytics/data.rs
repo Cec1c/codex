@@ -18,15 +18,17 @@ pub(super) const GROUPINGS: [Grouping; 7] = [
     Grouping::TokenType,
 ];
 
-pub(super) const GROUP_LABELS: [&str; 7] = [
-    "Surface",
-    "Feature",
-    "Model",
-    "Turn start",
-    "Speed",
-    "Reasoning",
-    "Token type",
-];
+pub(super) static GROUP_LABELS: std::sync::LazyLock<[&str; 7]> = std::sync::LazyLock::new(|| {
+    [
+        crate::i18n::tr!("analytics-surface", "Surface"),
+        crate::i18n::tr!("analytics-feature", "Feature"),
+        crate::i18n::tr!("ui-model", "Model"),
+        crate::i18n::tr!("analytics-turn-start", "Turn start"),
+        crate::i18n::tr!("analytics-speed", "Speed"),
+        crate::i18n::tr!("analytics-reasoning", "Reasoning"),
+        crate::i18n::tr!("analytics-token-type", "Token type"),
+    ]
+});
 
 pub(super) struct Pending<T> {
     receiver: oneshot::Receiver<Result<Option<T>, String>>,
@@ -67,8 +69,16 @@ impl<T: Send + 'static> Load<T> {
                         .await
                     {
                         Ok(Ok(result)) => result,
-                        Ok(Err(_)) => Err("Request interrupted. Press R to retry.".into()),
-                        Err(_) => Err("Request timed out. Press R to retry.".into()),
+                        Ok(Err(_)) => Err(crate::i18n::tr!(
+                            "analytics-request-interrupted",
+                            "Request interrupted. Press R to retry."
+                        )
+                        .into()),
+                        Err(_) => Err(crate::i18n::tr!(
+                            "analytics-request-timeout",
+                            "Request timed out. Press R to retry."
+                        )
+                        .into()),
                     };
                 let _ = sender.send(result);
                 frame.schedule_frame();
@@ -82,9 +92,13 @@ impl<T: Send + 'static> Load<T> {
                 Ok(Ok(Some(data))) => Self::Ready(data),
                 Ok(Ok(None)) => Self::Unavailable,
                 Ok(Err(message)) => Self::Error(message),
-                Err(oneshot::error::TryRecvError::Closed) => {
-                    Self::Error("Request interrupted. Press R to retry.".into())
-                }
+                Err(oneshot::error::TryRecvError::Closed) => Self::Error(
+                    crate::i18n::tr!(
+                        "analytics-request-interrupted",
+                        "Request interrupted. Press R to retry."
+                    )
+                    .into(),
+                ),
                 Err(oneshot::error::TryRecvError::Empty) => return,
             };
         }
@@ -101,8 +115,11 @@ impl<T: Send + 'static> Load<T> {
     pub(super) fn message(&self) -> Option<&str> {
         match self {
             Self::Ready(_) => None,
-            Self::Loading(_) => Some("Loading…"),
-            Self::Unavailable => Some("No history has been reported."),
+            Self::Loading(_) => Some(crate::i18n::tr!("analytics-loading", "Loading…")),
+            Self::Unavailable => Some(crate::i18n::tr!(
+                "analytics-no-history",
+                "No history has been reported."
+            )),
             Self::Error(message) => Some(message),
         }
     }
@@ -110,7 +127,11 @@ impl<T: Send + 'static> Load<T> {
 
 /// Keep untyped server and transport diagnostics out of account reports.
 pub(super) fn error(_error: codex_app_server_client::TypedRequestError) -> String {
-    "Couldn't load analytics. Press R to retry.".into()
+    crate::i18n::tr!(
+        "analytics-load-failed",
+        "Couldn't load analytics. Press R to retry."
+    )
+    .into()
 }
 
 /// Keep tiny refunds visible while avoiding noise on ordinary credit amounts.

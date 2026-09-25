@@ -108,7 +108,9 @@ impl AnalyticsView {
             return;
         }
         if self.show_help {
-            "Usage shortcuts".bold().render(area, buf);
+            crate::i18n::tr!("analytics-shortcuts", "Usage shortcuts")
+                .bold()
+                .render(area, buf);
             return;
         }
         if self.visible_sections().is_empty() {
@@ -180,7 +182,9 @@ impl AnalyticsView {
                     " ".dim(),
                     self.token_model
                         .clone()
-                        .unwrap_or_else(|| "All models".into())
+                        .unwrap_or_else(|| {
+                            crate::i18n::tr!("analytics-all-models", "All models").into()
+                        })
                         .into(),
                 ]),
             ));
@@ -190,7 +194,7 @@ impl AnalyticsView {
                 Control::TaskMetric,
                 Line::from(vec![
                     key_hint::plain(KeyCode::Char('s')).into(),
-                    " sort: ".dim(),
+                    crate::i18n::tr!("analytics-sort-prefix", " sort: ").dim(),
                     super::task_panel::METRICS[self.task_metric()].into(),
                 ]),
             ));
@@ -218,19 +222,24 @@ impl AnalyticsView {
                 },
                 " / ".dim(),
                 if self.plan.window == 1 {
-                    "Weekly".set_style(accent_style()).bold()
+                    crate::i18n::tr!("analytics-weekly", "Weekly")
+                        .set_style(accent_style())
+                        .bold()
                 } else {
-                    "Weekly".dim()
+                    crate::i18n::tr!("analytics-weekly", "Weekly").dim()
                 },
             ]);
             rows[row].push((Control::PlanWindow, plan_window));
         }
         if !self.zoomed {
-            let mut dashboard = Line::from("Dashboard".bold());
+            let mut dashboard =
+                Line::from(crate::i18n::tr!("analytics-dashboard", "Dashboard").bold());
             if let Some(hint) = self.keymap.primary_hint(crate::keymap::ListAction::Accept) {
                 dashboard.spans.push(" · ".dim());
                 dashboard.spans.extend(hint.spans());
-                dashboard.spans.push(" focus".dim());
+                dashboard
+                    .spans
+                    .push(crate::i18n::tr!("analytics-focus-hint", " focus").dim());
             }
             rows[0].insert(/*index*/ 0, (Control::Dashboard, dashboard));
         }
@@ -278,9 +287,10 @@ impl AnalyticsView {
             .and_then(|value| chrono::DateTime::from_timestamp(value, /*nsecs*/ 0));
         let metadata = updated
             .map(|updated| {
-                format!(
-                    "Updated · {} UTC",
-                    updated.format(self.clock_format.date_time_format())
+                crate::i18n::tr_format!(
+                    "analytics-updated",
+                    "Updated · {value} UTC",
+                    value = updated.format(self.clock_format.date_time_format())
                 )
             })
             .unwrap_or_default();

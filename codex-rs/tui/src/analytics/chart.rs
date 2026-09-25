@@ -218,17 +218,17 @@ impl AnalyticsView {
                 .bold()
                 .into(),
                 if history.unit == AccountAnalyticsUnit::Tokens {
-                    "Tokens"
+                    crate::i18n::tr!("analytics-tokens", "Tokens")
                 } else if section == Section::Usage {
                     "Share"
                 } else if section == Section::Activity {
-                    "Messages"
+                    crate::i18n::tr!("analytics-messages", "Messages")
                 } else if section == Section::Plugins {
                     "Calls"
                 } else if section == Section::Skills {
                     "Uses"
                 } else {
-                    "Credits"
+                    crate::i18n::tr!("analytics-credits", "Credits")
                 }
                 .bold()
                 .into(),

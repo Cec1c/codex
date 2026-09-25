@@ -6,6 +6,28 @@ use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
 #[test]
+fn host_fallback_is_limited_to_the_windows_detachment_restriction() {
+    let restriction = anyhow::anyhow!(
+        "host Job Object prevents daemon detachment; start from a host that allows breakaway"
+    )
+    .context("starting local daemon");
+    assert_eq!(
+        daemon_startup::host_requires_embedded(&restriction),
+        cfg!(windows)
+    );
+    for error in [
+        "missing codex-package.json",
+        "failed to connect to the background server",
+        "start the Windows daemon from a non-elevated terminal",
+    ] {
+        assert_eq!(
+            daemon_startup::host_requires_embedded(&anyhow::anyhow!(error)),
+            false
+        );
+    }
+}
+
+#[test]
 fn audited_overrides_allow_daemon_without_allowing_arbitrary_config() {
     for (raw, eligible) in [
         ("features.transcript_v2=true", true),

@@ -48,6 +48,26 @@ fn draw(view: &WarningsView, width: u16, height: u16) -> String {
 }
 
 #[test]
+#[ignore = "Run by i18n::tests::chinese_ui_snapshots_use_an_isolated_runtime_locale"]
+fn chinese_warning_snapshot() {
+    use crate::history_cell::HistoryCell;
+
+    assert_eq!(crate::i18n::active_locale(), "zh-CN");
+    let entries = crate::history_cell::StartupWarningsCell::new(vec![
+        "此终端不允许启动独立后台服务，将在当前进程中继续运行；退出 Codex 时任务会停止。".into(),
+    ])
+    .warning_entries();
+    let (tx, _rx) = unbounded_channel();
+    let view = WarningsView::new(entries, RuntimeKeymap::defaults(), AppEventSender::new(tx));
+    for width in [40, 80] {
+        insta::assert_snapshot!(
+            format!("warnings_chinese_{width}"),
+            draw(&view, width, /*height*/ 12)
+        );
+    }
+}
+
+#[test]
 fn warning_pages_copy_only_the_current_diagnostic() {
     let (tx, mut rx) = unbounded_channel();
     let mut view = WarningsView::new(

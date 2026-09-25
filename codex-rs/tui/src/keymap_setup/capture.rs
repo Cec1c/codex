@@ -72,27 +72,37 @@ impl KeymapCaptureView {
     fn lines(&self, width: u16) -> Vec<Line<'static>> {
         let wrap_width = usize::from(width.max(1));
         let header = vec![
-            Line::from("Remap Shortcut".bold()),
+            Line::from(crate::i18n::tr!("keymap-remap-shortcut-title", "Remap Shortcut").bold()),
             Line::from(vec![
-                "Action: ".dim(),
+                crate::i18n::tr!("keymap-action-label", "Action: ").dim(),
                 self.label.clone().into(),
                 "  ".into(),
                 format!("{}.{}", self.context, self.action).dim(),
             ]),
             Line::from(vec![
-                "Current: ".dim(),
+                crate::i18n::tr!("keymap-current-prefix", "Current: ").dim(),
                 self.current_binding.clone().fg(accent_color()),
             ]),
         ];
         let mut lines = word_wrap_lines(&header, wrap_width);
 
         let instructions = match (self.capture_mode, self.first_stroke.as_deref()) {
-            (KeymapCaptureMode::SingleKey, _) => "Press the new key now. Esc cancels.".to_string(),
-            (KeymapCaptureMode::Chord, None) => {
-                "Press the first key, then the second. Esc cancels.".to_string()
-            }
+            (KeymapCaptureMode::SingleKey, _) => crate::i18n::tr!(
+                "keymap-press-new-key",
+                "Press the new key now. Esc cancels."
+            )
+            .to_string(),
+            (KeymapCaptureMode::Chord, None) => crate::i18n::tr!(
+                "keymap-press-chord",
+                "Press the first key, then the second. Esc cancels."
+            )
+            .to_string(),
             (KeymapCaptureMode::Chord, Some(first)) => {
-                format!("First key: {first}. Press the second key. Esc cancels.")
+                crate::i18n::tr_format!(
+                    "keymap-chord-first",
+                    "First key: {first}. Press the second key. Esc cancels.",
+                    first = &first
+                )
             }
         };
         lines.extend(
@@ -104,7 +114,7 @@ impl KeymapCaptureView {
         if let Some(error) = &self.error_message {
             lines.push(Line::from(""));
             let options = textwrap::Options::new(wrap_width)
-                .initial_indent("Error: ")
+                .initial_indent(crate::i18n::tr!("keymap-error-prefix", "Error: "))
                 .subsequent_indent("       ");
             lines.extend(
                 textwrap::wrap(error, options)

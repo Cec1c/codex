@@ -137,7 +137,7 @@ impl AnalyticsView {
             && (section == Section::Credits
                 || (section == Section::Usage && !self.consumer_attribution()))
         {
-            "Product"
+            crate::i18n::tr!("analytics-product", "Product")
         } else {
             super::data::GROUP_LABELS[group]
         }

@@ -1,5 +1,6 @@
 ---
 source: tui/src/app/composer_hints_tests.rs
+assertion_line: 234
 expression: "crate::chatwidget::tests::helpers::normalize_snapshot_paths(snapshots.join(\"\\n\\n\"))"
 ---
 80 columns
@@ -19,5 +20,5 @@ expression: "crate::chatwidget::tests::helpers::normalize_snapshot_paths(snapsho
 
 › Ask Codex to do anything
 
-  GPT-5.6-Sol default · /tmp/pr…
+  GPT-5.6-Sol default
   ? for shortcuts

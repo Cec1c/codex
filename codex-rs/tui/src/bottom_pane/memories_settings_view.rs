@@ -23,7 +23,7 @@ use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
+use crate::style::menu_surface_style;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -34,6 +34,10 @@ use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
 
 const MEMORIES_DOC_URL: &str = "https://developers.openai.com/codex/memories";
+
+fn memories_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum MemoriesSetting {
@@ -49,14 +53,14 @@ enum MemoriesAction {
 enum MemoriesMenuItem {
     Setting {
         setting: MemoriesSetting,
-        name: &'static str,
-        description: &'static str,
+        name: String,
+        description: String,
         enabled: bool,
     },
     Action {
         action: MemoriesAction,
-        name: &'static str,
-        description: &'static str,
+        name: String,
+        description: String,
     },
 }
 
@@ -81,20 +85,29 @@ impl MemoriesSettingsView {
             items: vec![
                 MemoriesMenuItem::Setting {
                     setting: MemoriesSetting::Use,
-                    name: "Use memories",
-                    description: "Use memories starting with the next thread",
+                    name: memories_text("memories-use", "Use memories"),
+                    description: memories_text(
+                        "memories-use-description",
+                        "Use memories starting with the next thread",
+                    ),
                     enabled: use_memories,
                 },
                 MemoriesMenuItem::Setting {
                     setting: MemoriesSetting::Generate,
-                    name: "Generate memories",
-                    description: "Generate memories from this thread and future threads",
+                    name: memories_text("memories-generate", "Generate memories"),
+                    description: memories_text(
+                        "memories-generate-description",
+                        "Generate memories from this thread and future threads",
+                    ),
                     enabled: generate_memories,
                 },
                 MemoriesMenuItem::Action {
                     action: MemoriesAction::Reset,
-                    name: "Reset all memories",
-                    description: "Clear local memory files and summaries without changing existing threads",
+                    name: memories_text("memories-reset", "Reset all memories"),
+                    description: memories_text(
+                        "memories-reset-description",
+                        "Clear local memory files and summaries without changing existing threads",
+                    ),
                 },
             ],
             state: ScrollState::new(),
@@ -102,7 +115,8 @@ impl MemoriesSettingsView {
             complete: false,
             app_event_tx,
             docs_link: Line::from(vec![
-                "Learn more: ".dim(),
+                memories_text("memories-learn-more", "Learn more:").dim(),
+                " ".into(),
                 MEMORIES_DOC_URL
                     .fg(crate::style::accent_color())
                     .underlined(),
@@ -119,11 +133,19 @@ impl MemoriesSettingsView {
 
     fn settings_header(&self) -> ColumnRenderable<'_> {
         let mut header = ColumnRenderable::new();
-        header.push(Paragraph::new(Line::from("Memories".bold())).wrap(Wrap { trim: false }));
         header.push(
             Paragraph::new(Line::from(
-                "Choose how Codex uses and creates memories. Changes are saved to config.toml"
-                    .dim(),
+                memories_text("memories-title", "Memories").bold(),
+            ))
+            .wrap(Wrap { trim: false }),
+        );
+        header.push(
+            Paragraph::new(Line::from(
+                memories_text(
+                    "memories-subtitle",
+                    "Choose how Codex uses and creates memories. Changes are saved to config.toml",
+                )
+                .dim(),
             ))
             .wrap(Wrap { trim: false }),
         );
@@ -133,11 +155,17 @@ impl MemoriesSettingsView {
     fn reset_confirmation_header(&self) -> ColumnRenderable<'_> {
         let mut header = ColumnRenderable::new();
         header.push(
-            Paragraph::new(Line::from("Reset all memories?".bold())).wrap(Wrap { trim: false }),
+            Paragraph::new(Line::from(
+                memories_text("memories-reset-title", "Reset all memories?").bold(),
+            ))
+            .wrap(Wrap { trim: false }),
         );
         header.push(
             Paragraph::new(Line::from(
-                "This clears local memory files and rollout summaries for the current Codex home."
+                memories_text(
+                "memories-reset-warning",
+                "This clears local memory files and rollout summaries for the current Codex home.",
+            )
                     .dim(),
             ))
             .wrap(Wrap { trim: false }),
@@ -163,25 +191,28 @@ impl MemoriesSettingsView {
 
     fn build_rows(&self) -> Vec<GenericDisplayRow> {
         if let Some(state) = self.reset_confirmation.as_ref() {
-            return ["Reset all memories", "Go back"]
-                .into_iter()
-                .enumerate()
-                .map(|(idx, name)| GenericDisplayRow {
-                    selection_style: Some(super::picker_style::selection_style()),
-                    wrap_indent: Some(2),
-                    name: if state.selected_idx == Some(idx) {
-                        format!("› {name}")
-                    } else {
-                        format!("  {name}")
-                    },
-                    description: Some(match idx {
-                        0 => "Delete local memory files and rollout summaries".to_string(),
-                        1 => "Return to memory settings".to_string(),
-                        _ => unreachable!("reset confirmation only renders two rows"),
-                    }),
-                    ..Default::default()
-                })
-                .collect();
+            return [
+                memories_text("memories-reset-confirm", "Reset all memories"),
+                memories_text("memories-go-back", "Go back"),
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(idx, name)| GenericDisplayRow {
+                selection_style: Some(super::picker_style::selection_style()),
+                wrap_indent: Some(2),
+                name: if state.selected_idx == Some(idx) {
+                    format!("› {name}")
+                } else {
+                    format!("  {name}")
+                },
+                description: Some(match idx {
+                    0 => "Delete local memory files and rollout summaries".to_string(),
+                    1 => "Return to memory settings".to_string(),
+                    _ => unreachable!("reset confirmation only renders two rows"),
+                }),
+                ..Default::default()
+            })
+            .collect();
         }
 
         let selected_idx = self.state.selected_idx;
@@ -216,7 +247,7 @@ impl MemoriesSettingsView {
                         2
                     }),
                     name,
-                    description: Some((*description).to_string()),
+                    description: Some(description.clone()),
                     ..Default::default()
                 }
             })
@@ -405,7 +436,7 @@ impl Renderable for MemoriesSettingsView {
         .areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(menu_surface_style())
             .render(content_area, buf);
 
         let header = if self.reset_confirmation.is_some() {
@@ -441,7 +472,7 @@ impl Renderable for MemoriesSettingsView {
                 &rows,
                 self.active_state(),
                 MAX_POPUP_ROWS,
-                "  No memory settings available",
+                &memories_text("memories-empty", "  No memory settings available"),
             );
         }
         if self.reset_confirmation.is_none() {

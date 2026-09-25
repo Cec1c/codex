@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "type": "theme",
+  "id": "rainbow_color",
+  "displayName": "Claude Code Style",
+  "version": "2.0.0",
+  "statusLine": {
+    "separator": " │ ",
+    "progressWidth": 10,
+    "filled": "█",
+    "empty": "█",
+    "modelEmojis": [
+      "🐱"
+    ],
+    "palette": [],
+    "randomizePalette": false,
+    "softenColors": false,
+    "modelReasoningStyle": "bracketed",
+    "colors": {
+      "model": "#F5E0DC",
+      "usage": "#F5C2E7",
+      "progress": "#A6E3A1",
+      "time": "#F9E2AF",
+      "quota": "#FAB387",
+      "separator": "#CBA6F7",
+      "progressEmpty": "#3B4A42",
+      "percent": "#74C7EC",
+      "activeTime": "#89DCEB",
+      "permissions": "#FF6B80"
+    }
+  },
+  "welcome": {
+    "title": "#FF6B80",
+    "version": "#A5ADCB",
+    "label": "#FF6B80",
+    "model": "#CAD3F5",
+    "path": "#A5ADCB",
+    "permissions": "#FF6B80",
+    "border": "#ED8796",
+    "command": "#CAD3F5",
+    "badge": "#FF6B80"
+  },
+  "statusCard": {
+    "border": "#ED8796",
+    "title": "#FF6B80",
+    "version": "#F5E0DC",
+    "label": "#A5ADCB",
+    "model": "#F5E0DC",
+    "path": "#CAD3F5",
+    "permissions": "#FF6B80",
+    "usage": "#89DCEB",
+    "progress": "#A6E3A1",
+    "percent": "#74C7EC",
+    "limits": "#F9E2AF",
+    "link": "#89DCEB",
+    "value": "#CDD6F4"
+  },
+  "dialog": {
+    "selection": "#FF6B80",
+    "background": null
+  },
+  "composer": {
+    "background": null
+  },
+  "interface": {
+    "layout": "claude",
+    "foreground": "#CAD3F5",
+    "muted": "#A5ADCB",
+    "userBackground": "#5B6078",
+    "rule": "#A5ADCB"
+  }
+}

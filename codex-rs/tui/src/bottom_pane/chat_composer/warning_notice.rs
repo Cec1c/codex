@@ -3,6 +3,7 @@
 //! Only the count and warning label receive an amber accent; surrounding hints stay muted.
 
 use super::*;
+use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 
 impl ChatComposer {
     pub(crate) fn warning_notice_contains(&self, position: ratatui::layout::Position) -> bool {
@@ -56,7 +57,11 @@ impl ChatComposer {
     }
 
     pub(super) fn warning_notice(&self, count: usize, width: u16) -> Line<'static> {
-        let plural = if count == 1 { "" } else { "s" };
+        let label = if count == 1 {
+            crate::i18n::tr_format!("warnings-count-one", "{count} warning", count = count)
+        } else {
+            crate::i18n::tr_format!("warnings-count-many", "{count} warnings", count = count)
+        };
         let accent = crate::style::warning_notice_style();
         let secondary = crate::style::secondary_text_style();
         let shortcut = self
@@ -64,14 +69,10 @@ impl ChatComposer {
             .show_warnings_key
             .map(ShortcutHint::display_label)
             .unwrap_or_else(|| "/warnings".into());
-        let mut full = Line::from(vec![
-            "⚠ ".into(),
-            Span::styled(format!("{count} warning{plural}"), accent),
-            " · ".into(),
-        ])
-        .style(secondary);
+        let mut full = Line::from(vec!["⚠ ".into(), Span::styled(label, accent), " · ".into()])
+            .style(secondary);
         full.extend(key_hint::key_label_spans(&shortcut));
-        full.push_span(" to view");
+        full.push_span(crate::i18n::tr!("warnings-view-hint", " to view"));
         if full.width() <= usize::from(width) {
             return full;
         }

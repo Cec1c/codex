@@ -52,7 +52,12 @@ fn combined_description(
     description_layout: SelectionDescriptionLayout,
 ) -> Option<String> {
     match (&row.description, &row.disabled_reason) {
-        (Some(desc), Some(reason)) => Some(format!("{desc} (disabled: {reason})")),
+        (Some(desc), Some(reason)) => Some(crate::i18n::tr_format!(
+            "picker-disabled-description",
+            "{desc} (disabled: {reason})",
+            desc = desc,
+            reason = reason
+        )),
         (Some(desc), None) => Some(desc.clone()),
         (None, Some(reason))
             if matches!(
@@ -62,7 +67,11 @@ fn combined_description(
         {
             Some(reason.clone())
         }
-        (None, Some(reason)) => Some(format!("disabled: {reason}")),
+        (None, Some(reason)) => Some(crate::i18n::tr_format!(
+            "picker-disabled-reason",
+            "disabled: {reason}",
+            reason = reason
+        )),
         (None, None) => None,
     }
 }

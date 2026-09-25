@@ -32,15 +32,34 @@ impl App {
             .remote_connection
             .as_ref()
             .filter(|_| matches!(self.app_server_target, AppServerTarget::LocalDaemon { .. }))
-            .map(|connection| format!("Running daemon: {}", connection.version))
-            .unwrap_or_else(|| "Not connected to the local background server.".to_string());
-        let mut header = vec![Line::from("Daemon".bold()), Line::from(status.dim())];
+            .map(|connection| {
+                crate::i18n::tr_format!(
+                    "daemon-running-version",
+                    "Running daemon: {value}",
+                    value = connection.version
+                )
+            })
+            .unwrap_or_else(|| {
+                crate::i18n::tr!(
+                    "daemon-not-connected",
+                    "Not connected to the local background server."
+                )
+                .to_string()
+            });
+        let mut header = vec![
+            Line::from(crate::i18n::tr!("daemon-title", "Daemon").bold()),
+            Line::from(status.dim()),
+        ];
         let unavailable = if matches!(self.app_server_target, AppServerTarget::Remote { .. }) {
-            Some(
-                "Manage this server on its host. Local daemon updates are unavailable for remote connections.",
-            )
+            Some(crate::i18n::tr!(
+                "daemon-remote-guidance",
+                "Manage this server on its host. Local daemon updates are unavailable for remote connections."
+            ))
         } else if self.daemon_cli_executable.is_none() {
-            Some("Run the Codex CLI to manage the daemon from this menu.")
+            Some(crate::i18n::tr!(
+                "daemon-cli-guidance",
+                "Run the Codex CLI to manage the daemon from this menu."
+            ))
         } else {
             None
         };
@@ -59,9 +78,12 @@ impl App {
         let items = [
             (
                 DaemonUpdateSource::PublicStable,
-                "Install latest public stable",
+                crate::i18n::tr!("daemon-install-stable", "Install latest public stable"),
             ),
-            (DaemonUpdateSource::ThisCli, "Use this CLI build"),
+            (
+                DaemonUpdateSource::ThisCli,
+                crate::i18n::tr!("daemon-use-cli", "Use this CLI build"),
+            ),
         ]
         .into_iter()
         .map(|(source, name)| SelectionItem {
@@ -70,7 +92,10 @@ impl App {
             disabled_reason: (unavailable.is_none()
                 && source == DaemonUpdateSource::ThisCli
                 && !has_package)
-                .then(|| "This CLI has no local package to copy".to_string()),
+                .then(|| {
+                    crate::i18n::tr!("daemon-no-package", "This CLI has no local package to copy")
+                        .to_string()
+                }),
             actions: vec![Box::new(move |tx| {
                 tx.send(AppEvent::ConfirmDaemonUpdate(source));
             })],
@@ -93,27 +118,29 @@ impl App {
             return;
         }
         let mut explanation = match source {
-            DaemonUpdateSource::PublicStable => "Install the latest public stable release. Restore production updates; keep your automatic-update setting.".to_string(),
+            DaemonUpdateSource::PublicStable => crate::i18n::tr!("daemon-stable-explanation", "Install the latest public stable release. Restore production updates; keep your automatic-update setting.").to_string(),
             DaemonUpdateSource::ThisCli => {
                 let version = codex_install_context::InstallContext::current()
                     .package_manifest()
                     .map_or_else(|| CODEX_CLI_VERSION.to_string(), |manifest| manifest.version.to_string());
-                format!("Use this CLI package v{version} from {}. Copy the complete package and pin it against automatic updates.", executable.display())
+                crate::i18n::tr_format!("daemon-cli-package-description", "Use this CLI package v{version} from {value}. Copy the complete package and pin it against automatic updates.", version = &version, value = executable.display())
             }
         };
         explanation.push_str("\nThis may restart the daemon and interrupt active or queued work.\nCodex exits to update in this terminal. Relaunch it afterward.");
-        let mut header = vec![Line::from("Update daemon and exit Codex?".bold())];
+        let mut header = vec![Line::from(
+            crate::i18n::tr!("daemon-confirm-update", "Update daemon and exit Codex?").bold(),
+        )];
         header.extend(explanation.lines().map(|line| Line::from(line.to_owned())));
         self.chat_widget.show_selection_view(SelectionViewParams {
             header: Box::new(DaemonMenuHeader(header)),
             items: vec![
                 SelectionItem {
-                    name: "Cancel".to_string(),
+                    name: crate::i18n::tr!("ui-cancel", "Cancel").to_string(),
                     dismiss_on_select: true,
                     ..Default::default()
                 },
                 SelectionItem {
-                    name: "Update and exit".to_string(),
+                    name: crate::i18n::tr!("daemon-update-exit", "Update and exit").to_string(),
                     actions: vec![Box::new(move |tx| {
                         tx.send(AppEvent::RunDaemonUpdate(source))
                     })],

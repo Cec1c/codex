@@ -63,6 +63,16 @@ pub fn user_message_style() -> Style {
 
 /// Submitted prompts use a lighter fill than the editable composer in either theme.
 pub(crate) fn history_prompt_style() -> Style {
+    if let Some(theme) = crate::ccu_theme::active()
+        && let Some(background) = theme
+            .interface_style("userBackground")
+            .and_then(|style| style.fg)
+    {
+        return theme
+            .interface_style("foreground")
+            .unwrap_or_default()
+            .bg(background);
+    }
     let Some(background) = default_bg() else {
         return Style::default();
     };
@@ -72,6 +82,23 @@ pub(crate) fn history_prompt_style() -> Style {
         ((255, 255, 255), 0.16)
     };
     Style::default().bg(best_color(blend(foreground, background, alpha)))
+}
+
+pub(crate) fn menu_surface_style() -> Style {
+    crate::ccu_theme::active()
+        .and_then(crate::ccu_theme::CcuTheme::dialog_surface_style)
+        .unwrap_or_else(user_message_style)
+}
+
+pub(crate) fn composer_style() -> Style {
+    if let Some(style) =
+        crate::ccu_theme::active().and_then(|theme| theme.interface_style("foreground"))
+    {
+        return style;
+    }
+    crate::ccu_theme::active()
+        .and_then(crate::ccu_theme::CcuTheme::composer_style)
+        .unwrap_or_else(user_message_style)
 }
 
 pub fn proposed_plan_style() -> Style {
@@ -85,6 +112,11 @@ pub(crate) fn table_separator_style() -> Style {
 
 /// Returns the shared accent style for active or selected TUI controls.
 pub(crate) fn accent_style() -> Style {
+    if let Some(style) =
+        crate::ccu_theme::active().and_then(crate::ccu_theme::CcuTheme::dialog_selection_style)
+    {
+        return style.bold();
+    }
     if matches!(
         effective_stdout_color_level(),
         StdoutColorLevel::TrueColor | StdoutColorLevel::Ansi256
@@ -101,11 +133,17 @@ pub(crate) fn accent_style() -> Style {
 
 /// Returns the foreground accent without imposing bold or dim text modifiers.
 pub(crate) fn accent_color() -> Color {
-    accent_color_for(default_bg())
+    accent_color_on(/*background*/ None)
 }
 
 /// Resolve emphasis against the fill actually painted behind it.
 pub(crate) fn accent_color_on(background: Option<Color>) -> Color {
+    if let Some(color) = crate::ccu_theme::active()
+        .and_then(crate::ccu_theme::CcuTheme::dialog_selection_style)
+        .and_then(|style| style.fg)
+    {
+        return readable_color_on(color, background);
+    }
     accent_color_for(background_rgb(background))
 }
 
@@ -141,6 +179,13 @@ pub(crate) fn readable_color_on(preferred: Color, background: Option<Color>) -> 
 
 /// Secondary text uses a measured foreground instead of terminal-dependent dimming.
 pub(crate) fn secondary_text_style() -> Style {
+    if let Some(style) = crate::ccu_theme::active().and_then(|theme| theme.interface_style("muted"))
+    {
+        return style.fg(readable_color_on(
+            style.fg.unwrap_or(Color::Reset),
+            /*background*/ None,
+        ));
+    }
     let preferred = default_fg()
         .zip(default_bg())
         .map_or(Color::Reset, |(fg, bg)| {
@@ -153,6 +198,16 @@ pub(crate) fn secondary_text_style() -> Style {
 }
 
 pub(crate) fn selection_style() -> Style {
+    if let Some(style) =
+        crate::ccu_theme::active().and_then(crate::ccu_theme::CcuTheme::dialog_selection_style)
+    {
+        return style
+            .fg(readable_color_on(
+                style.fg.unwrap_or(Color::Reset),
+                /*background*/ None,
+            ))
+            .bold();
+    }
     contrast::selection_style(default_bg(), effective_stdout_color_level())
 }
 

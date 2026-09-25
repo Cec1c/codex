@@ -522,6 +522,7 @@ pub(super) async fn run_main_inner(
     // Disabling shared services requires confirmation, even on a fresh auto-start.
     daemon_features.retain(|_, enabled| *enabled);
     let mut managed_daemon = false;
+    let mut host_daemon_warning = None;
     if auto_start_daemon && daemon_exclusion.is_none() {
         startup_draft.flush_pending_events().await?;
         let output = startup_draft
@@ -531,18 +532,32 @@ pub(super) async fn run_main_inner(
                 crossterm::terminal::disable_raw_mode()?;
                 let result = codex_app_server_daemon::start_with_features(&daemon_features).await;
                 daemon_telemetry::record_start(&config, &result).await;
-                result.map_err(|err| {
-                    std::io::Error::other(format!("{err:#}\n{}", daemon_startup::FAILURE_HINT))
-                })
+                match result {
+                    Ok(output) => Ok(Some(output)),
+                    Err(err) if daemon_startup::host_requires_embedded(&err) => Ok(None),
+                    Err(err) => Err(std::io::Error::other(format!(
+                        "{err:#}\n{}",
+                        daemon_startup::FAILURE_HINT
+                    ))),
+                }
             })
             .await?;
-        managed_daemon = output.backend.is_some();
-        app_server_target = AppServerTarget::LocalDaemon {
-            endpoint: RemoteAppServerEndpoint::UnixSocket {
-                socket_path: AbsolutePathBuf::from_absolute_path_checked(output.socket_path)?,
-            },
-            allow_embedded_fallback: false,
-        };
+        if let Some(output) = output {
+            managed_daemon = output.backend.is_some();
+            app_server_target = AppServerTarget::LocalDaemon {
+                endpoint: RemoteAppServerEndpoint::UnixSocket {
+                    socket_path: AbsolutePathBuf::from_absolute_path_checked(output.socket_path)?,
+                },
+                allow_embedded_fallback: false,
+            };
+        } else {
+            app_server_target = AppServerTarget::Embedded;
+            host_daemon_warning = Some(crate::i18n::global().text(
+                "daemon-host-embedded-warning", None, || {
+                    "This terminal does not allow a detached background server. Continuing in this process; tasks will stop when Codex exits.".to_string()
+                },
+            ));
+        }
     }
     // The overview must inspect the shared server's agents regardless of local settings.
     let compatibility_warning = if cli.agents_overview {
@@ -563,7 +578,7 @@ pub(super) async fn run_main_inner(
     if app_server_target.uses_embedded_network_policy() {
         embedded_network_policy.activate(&mut config);
     }
-    let daemon_startup_warning = compatibility_warning.or_else(|| {
+    let daemon_startup_warning = host_daemon_warning.or(compatibility_warning).or_else(|| {
         daemon_exclusion
             .filter(|_| auto_start_daemon)
             .map(|reason| {

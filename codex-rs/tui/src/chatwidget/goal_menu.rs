@@ -15,8 +15,12 @@ impl ChatWidget {
         let status = edited_goal_status(goal.status);
         let token_budget = goal.token_budget;
         let view = CustomPromptView::new(
-            "Edit goal".to_string(),
-            "Type a goal objective and press Enter".to_string(),
+            crate::i18n::tr!("goal-edit", "Edit goal").to_string(),
+            crate::i18n::tr!(
+                "goal-edit-placeholder",
+                "Type a goal objective and press Enter"
+            )
+            .to_string(),
             goal.objective,
             /*context_label*/ None,
             Box::new(move |objective: String| {
@@ -48,21 +52,39 @@ impl ChatWidget {
             });
         })];
         self.show_selection_view(SelectionViewParams {
-            title: Some("Resume paused goal?".to_string()),
-            subtitle: Some(format!("Goal: {objective}")),
+            title: Some(
+                crate::i18n::tr!("goal-resume-question", "Resume paused goal?").to_string(),
+            ),
+            subtitle: Some(crate::i18n::tr_format!(
+                "goal-objective-message",
+                "Goal: {objective}",
+                objective = &objective
+            )),
             footer_hint: Some(standard_popup_hint_line()),
             initial_selected_idx: Some(0),
             items: vec![
                 SelectionItem {
-                    name: "Resume goal".to_string(),
-                    description: Some("Mark it active and continue when idle".to_string()),
+                    name: crate::i18n::tr!("goal-resume", "Resume goal").to_string(),
+                    description: Some(
+                        crate::i18n::tr!(
+                            "goal-resume-description",
+                            "Mark it active and continue when idle"
+                        )
+                        .to_string(),
+                    ),
                     actions: resume_actions,
                     dismiss_on_select: true,
                     ..Default::default()
                 },
                 SelectionItem {
-                    name: "Leave paused".to_string(),
-                    description: Some("Keep it paused; use /goal resume later".to_string()),
+                    name: crate::i18n::tr!("goal-leave-paused", "Leave paused").to_string(),
+                    description: Some(
+                        crate::i18n::tr!(
+                            "goal-leave-paused-description",
+                            "Keep it paused; use /goal resume later"
+                        )
+                        .to_string(),
+                    ),
                     dismiss_on_select: true,
                     ..Default::default()
                 },
@@ -84,34 +106,43 @@ impl ChatWidget {
 
 fn goal_summary_lines(goal: &AppThreadGoal) -> Vec<Line<'static>> {
     let mut lines = vec![
-        Line::from("Goal".bold()),
+        Line::from(crate::i18n::tr!("goal-title", "Goal").bold()),
         Line::from(vec![
-            "Status: ".dim(),
+            crate::i18n::tr!("goal-status-label", "Status: ").dim(),
             goal_status_label(goal.status).to_string().into(),
         ]),
-        Line::from(vec!["Objective: ".dim(), goal.objective.clone().into()]),
         Line::from(vec![
-            "Time used: ".dim(),
+            crate::i18n::tr!("goal-objective-label", "Objective: ").dim(),
+            goal.objective.clone().into(),
+        ]),
+        Line::from(vec![
+            crate::i18n::tr!("goal-time-label", "Time used: ").dim(),
             format_goal_elapsed_seconds(goal.time_used_seconds).into(),
         ]),
         Line::from(vec![
-            "Tokens used: ".dim(),
+            crate::i18n::tr!("goal-tokens-label", "Tokens used: ").dim(),
             format_tokens_compact(goal.tokens_used).into(),
         ]),
     ];
     if let Some(token_budget) = goal.token_budget {
         lines.push(Line::from(vec![
-            "Token budget: ".dim(),
+            crate::i18n::tr!("goal-budget-label", "Token budget: ").dim(),
             format_tokens_compact(token_budget).into(),
         ]));
     }
     let command_hint = match goal.status {
-        AppThreadGoalStatus::Active => "Commands: /goal edit, /goal pause, /goal clear",
+        AppThreadGoalStatus::Active => crate::i18n::tr!(
+            "goal-active-commands",
+            "Commands: /goal edit, /goal pause, /goal clear"
+        ),
         AppThreadGoalStatus::Paused
         | AppThreadGoalStatus::Blocked
-        | AppThreadGoalStatus::UsageLimited => "Commands: /goal edit, /goal resume, /goal clear",
+        | AppThreadGoalStatus::UsageLimited => crate::i18n::tr!(
+            "goal-paused-commands",
+            "Commands: /goal edit, /goal resume, /goal clear"
+        ),
         AppThreadGoalStatus::BudgetLimited | AppThreadGoalStatus::Complete => {
-            "Commands: /goal edit, /goal clear"
+            crate::i18n::tr!("goal-commands", "Commands: /goal edit, /goal clear")
         }
     };
     lines.push(Line::default());
@@ -121,12 +152,16 @@ fn goal_summary_lines(goal: &AppThreadGoal) -> Vec<Line<'static>> {
 
 fn goal_status_label(status: AppThreadGoalStatus) -> &'static str {
     match status {
-        AppThreadGoalStatus::Active => "active",
-        AppThreadGoalStatus::Paused => "paused",
-        AppThreadGoalStatus::Blocked => "stalled",
-        AppThreadGoalStatus::UsageLimited => "usage limited",
-        AppThreadGoalStatus::BudgetLimited => "limited by budget",
-        AppThreadGoalStatus::Complete => "complete",
+        AppThreadGoalStatus::Active => crate::i18n::tr!("goal-status-active", "active"),
+        AppThreadGoalStatus::Paused => crate::i18n::tr!("goal-status-paused", "paused"),
+        AppThreadGoalStatus::Blocked => crate::i18n::tr!("goal-status-blocked", "stalled"),
+        AppThreadGoalStatus::UsageLimited => {
+            crate::i18n::tr!("goal-status-usage-limited", "usage limited")
+        }
+        AppThreadGoalStatus::BudgetLimited => {
+            crate::i18n::tr!("goal-status-budget-limited", "limited by budget")
+        }
+        AppThreadGoalStatus::Complete => crate::i18n::tr!("goal-status-complete", "complete"),
     }
 }
 

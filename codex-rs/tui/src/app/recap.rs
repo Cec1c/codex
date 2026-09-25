@@ -36,9 +36,20 @@ pub(super) const RECAP_DELAY: Duration = Duration::from_secs(/*secs*/ 30 * 60);
 const RECAP_MAX_CHARS: usize = 700;
 const RECAP_NEXT_MAX_CHARS: usize = 200;
 const RECAP_RETRY_DELAY: Duration = Duration::from_secs(/*secs*/ 30);
-const MANUAL_RECAP_FAILURE_MESSAGE: &str = "Could not generate a recap. Please try again.";
-const MANUAL_RECAP_IN_PROGRESS_MESSAGE: &str = "A recap is already being generated.";
-const MANUAL_RECAP_EMPTY_HISTORY_MESSAGE: &str = "There is no conversation history to recap.";
+static MANUAL_RECAP_FAILURE_MESSAGE: std::sync::LazyLock<&str> = std::sync::LazyLock::new(|| {
+    crate::i18n::tr!(
+        "recap-failed",
+        "Could not generate a recap. Please try again."
+    )
+});
+static MANUAL_RECAP_IN_PROGRESS_MESSAGE: std::sync::LazyLock<&str> =
+    std::sync::LazyLock::new(|| {
+        crate::i18n::tr!("recap-pending", "A recap is already being generated.")
+    });
+static MANUAL_RECAP_EMPTY_HISTORY_MESSAGE: std::sync::LazyLock<&str> =
+    std::sync::LazyLock::new(|| {
+        crate::i18n::tr!("recap-empty", "There is no conversation history to recap.")
+    });
 #[cfg(test)]
 pub(super) const RECAP_PROMPT_MAX_BYTES: usize = RecapPrompt::MAX_BYTES;
 

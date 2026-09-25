@@ -99,7 +99,7 @@ impl App {
             if let Some((_, checkout)) = &managed_worktree {
                 self.agents_overview_retained_worktree_error(
                     checkout,
-                    "Could not start the session.",
+                    crate::i18n::tr!("agents-start-failed", "Could not start the session."),
                 );
             }
             return Ok(AppRunControl::Continue);
@@ -111,7 +111,10 @@ impl App {
             if let Some((_, checkout)) = &managed_worktree {
                 self.agents_overview_retained_worktree_error(
                     checkout,
-                    "Could not load the new session settings.",
+                    crate::i18n::tr!(
+                        "agents-settings-failed",
+                        "Could not load the new session settings."
+                    ),
                 );
             }
             return Ok(AppRunControl::Continue);
@@ -153,10 +156,18 @@ impl App {
                 if let Some((_, checkout)) = &managed_worktree {
                     self.agents_overview_retained_worktree_error(
                         checkout,
-                        format!("Failed to start session: {error}"),
+                        crate::i18n::tr_format!(
+                            "agents-start-session-failed",
+                            "Failed to start session: {error}",
+                            error = &error
+                        ),
                     );
                 } else {
-                    self.add_agents_overview_error(format!("Failed to start session: {error}"));
+                    self.add_agents_overview_error(crate::i18n::tr_format!(
+                        "agents-start-session-failed",
+                        "Failed to start session: {error}",
+                        error = &error
+                    ));
                 }
                 return Ok(AppRunControl::Continue);
             }
@@ -171,9 +182,10 @@ impl App {
             let result =
                 if crate::session_resume::cwds_differ(started.session.cwd.as_path(), &checkout.cwd)
                 {
-                    Err(anyhow::anyhow!(
+                    Err(anyhow::anyhow!(crate::i18n::tr!(
+                        "agents-worktree-not-applied",
                         "The server did not apply the worktree directory."
-                    ))
+                    )))
                 } else {
                     manager.bind_thread(&checkout.root, &thread_id.to_string())
                 };
@@ -202,7 +214,7 @@ impl App {
             if let Some((_, checkout)) = &managed_worktree {
                 self.agents_overview_retained_worktree_error(
                     checkout,
-                    "Could not open the new session.",
+                    crate::i18n::tr!("agents-open-failed", "Could not open the new session."),
                 );
             }
         }
@@ -228,7 +240,11 @@ impl App {
             )
         {
             self.add_agents_overview_error(
-                "Managed worktrees require local worktree support.".to_string(),
+                crate::i18n::tr!(
+                    "agents-worktree-local",
+                    "Managed worktrees require local worktree support."
+                )
+                .to_string(),
             );
             return;
         }
@@ -241,7 +257,10 @@ impl App {
         let setup = async {
             anyhow::ensure!(
                 !config.active_project.is_untrusted(),
-                "The source project is not trusted."
+                crate::i18n::tr!(
+                    "agents-project-untrusted",
+                    "The source project is not trusted."
+                )
             );
             let host = crate::legacy_core::config::load_config_toml_with_layer_stack(
                 &self.config.codex_home,
@@ -284,7 +303,13 @@ impl App {
                     .map_err(|error| error.to_string())
             })
             .await
-            .unwrap_or_else(|error| Err(format!("Worktree creation task failed: {error}")));
+            .unwrap_or_else(|error| {
+                Err(crate::i18n::tr_format!(
+                    "worktree-creation-failed",
+                    "Worktree creation task failed: {error}",
+                    error = &error
+                ))
+            });
             sender.send(AppEvent::AgentsOverviewWorktreeCreated(result));
         });
     }

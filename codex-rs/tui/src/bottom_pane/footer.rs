@@ -110,6 +110,10 @@ pub(crate) enum GoalStatusIndicator {
 const MODE_CYCLE_HINT: &str = "shift+tab to cycle";
 const FOOTER_CONTEXT_GAP_COLS: u16 = 1;
 
+fn footer_text(key: &str, english: &str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct FooterKeyHints {
     pub(crate) agents: Option<ShortcutHint>,
@@ -151,12 +155,17 @@ impl FooterKeyHints {
 impl CollaborationModeIndicator {
     fn label(self, show_cycle_hint: bool) -> String {
         let suffix = if show_cycle_hint {
-            format!(" ({MODE_CYCLE_HINT})")
+            format!(
+                " ({})",
+                footer_text("footer-cycle-mode-hint", MODE_CYCLE_HINT)
+            )
         } else {
             String::new()
         };
         match self {
-            CollaborationModeIndicator::Plan => format!("Plan mode{suffix}"),
+            CollaborationModeIndicator::Plan => {
+                format!("{}{suffix}", footer_text("footer-plan-mode", "Plan mode"))
+            }
         }
     }
 
@@ -165,7 +174,10 @@ impl CollaborationModeIndicator {
         if show_cycle_hint {
             line.push_span(" (".set_style(secondary_text_style()));
             line.extend(key_hint::shift(KeyCode::Tab).spans());
-            line.push_span(" to cycle)".set_style(secondary_text_style()));
+            line.push_span(
+                crate::i18n::tr!("footer-cycle-suffix", " to cycle)")
+                    .set_style(secondary_text_style()),
+            );
         }
         line
     }
@@ -339,26 +351,37 @@ fn left_side_line(
         SummaryHintKind::Shortcuts => {
             if let Some(key) = key_hints.agents {
                 line.extend(key.spans());
-                line.push_span(" for agents".set_style(secondary_text_style()));
+                line.push_span(
+                    crate::i18n::tr!("footer-agents-hint", " for agents")
+                        .set_style(secondary_text_style()),
+                );
                 if key_hints.toggle_shortcuts.is_some() {
                     line.push_span(" · ".set_style(secondary_text_style()));
                 }
             }
             if let Some(key) = key_hints.toggle_shortcuts {
                 line.extend(key.spans());
-                line.push_span(" for shortcuts".set_style(secondary_text_style()));
+                line.push_span(
+                    footer_text("footer-for-shortcuts", " for shortcuts")
+                        .set_style(secondary_text_style()),
+                );
             }
         }
         SummaryHintKind::QueueMessage => {
             if let Some(key) = key_hints.queue {
                 line.extend(key.spans());
-                line.push_span(" to queue message".set_style(secondary_text_style()));
+                line.push_span(
+                    footer_text("footer-to-queue-message", " to queue message")
+                        .set_style(secondary_text_style()),
+                );
             }
         }
         SummaryHintKind::QueueShort => {
             if let Some(key) = key_hints.queue {
                 line.extend(key.spans());
-                line.push_span(" to queue".set_style(secondary_text_style()));
+                line.push_span(
+                    footer_text("footer-to-queue", " to queue").set_style(secondary_text_style()),
+                );
             }
         }
     };
@@ -583,26 +606,66 @@ pub(crate) fn goal_status_indicator_line(
     let label = match indicator {
         GoalStatusIndicator::Active { usage } => {
             if let Some(usage) = usage {
-                format!("Pursuing goal ({usage})")
+                crate::i18n::global().text_with_string_arg(
+                    "footer-goal-active-with-usage",
+                    "usage",
+                    usage.clone(),
+                    || {
+                        crate::i18n::tr_format!(
+                            "footer-goal-pursuing",
+                            "Pursuing goal ({usage})",
+                            usage = &usage
+                        )
+                    },
+                )
             } else {
-                "Pursuing goal".to_string()
+                footer_text("footer-goal-active", "Pursuing goal")
             }
         }
-        GoalStatusIndicator::Paused => "Goal paused (/goal resume)".to_string(),
-        GoalStatusIndicator::Blocked => "Goal stalled (/goal resume)".to_string(),
-        GoalStatusIndicator::UsageLimited => "Goal hit usage limits (/goal resume)".to_string(),
+        GoalStatusIndicator::Paused => {
+            footer_text("footer-goal-paused", "Goal paused (/goal resume)")
+        }
+        GoalStatusIndicator::Blocked => {
+            footer_text("footer-goal-blocked", "Goal stalled (/goal resume)")
+        }
+        GoalStatusIndicator::UsageLimited => footer_text(
+            "footer-goal-usage-limited",
+            "Goal hit usage limits (/goal resume)",
+        ),
         GoalStatusIndicator::BudgetLimited { usage } => {
             if let Some(usage) = usage {
-                format!("Goal unmet ({usage})")
+                crate::i18n::global().text_with_string_arg(
+                    "footer-goal-unmet-with-usage",
+                    "usage",
+                    usage.clone(),
+                    || {
+                        crate::i18n::tr_format!(
+                            "footer-goal-unmet",
+                            "Goal unmet ({usage})",
+                            usage = &usage
+                        )
+                    },
+                )
             } else {
-                "Goal abandoned".to_string()
+                footer_text("footer-goal-abandoned", "Goal abandoned")
             }
         }
         GoalStatusIndicator::Complete { usage } => {
             if let Some(usage) = usage {
-                format!("Goal achieved ({usage})")
+                crate::i18n::global().text_with_string_arg(
+                    "footer-goal-achieved-with-usage",
+                    "usage",
+                    usage.clone(),
+                    || {
+                        crate::i18n::tr_format!(
+                            "footer-goal-achieved",
+                            "Goal achieved ({usage})",
+                            usage = &usage
+                        )
+                    },
+                )
             } else {
-                "Goal achieved".to_string()
+                footer_text("footer-goal-achieved", "Goal achieved")
             }
         }
     };
@@ -618,7 +681,11 @@ pub(crate) fn status_line_right_indicator_line(
 ) -> Option<Line<'static>> {
     let primary_indicator = mode_indicator_line(collaboration_mode_indicator, show_cycle_hint)
         .or_else(|| goal_status_indicator_line(goal_status_indicator));
-    let ide_context_indicator = ide_context_active.then(|| Line::from(vec!["IDE context".cyan()]));
+    let ide_context_indicator = ide_context_active.then(|| {
+        Line::from(vec![
+            footer_text("footer-ide-context", "IDE context").cyan(),
+        ])
+    });
     let mut line: Option<Line<'static>> = None;
 
     for indicator in [primary_indicator, ide_context_indicator]
@@ -640,19 +707,29 @@ pub(crate) fn status_line_right_indicator_line(
 
 pub(crate) fn side_conversation_context_line(label: &str) -> Line<'static> {
     let mut line = Line::default();
-    let rest = if let Some(rest) = label.strip_prefix("Side ") {
-        line.extend(["Side".magenta().bold(), " ".into()]);
-        rest
-    } else {
-        label
-    };
+    let rest =
+        if let Some(rest) = label.strip_prefix(crate::i18n::tr!("footer-side-prefix", "Side ")) {
+            line.extend([
+                crate::i18n::tr!("footer-side-label", "Side")
+                    .magenta()
+                    .bold(),
+                " ".into(),
+            ]);
+            rest
+        } else {
+            label
+        };
     for (index, part) in rest.split(" · ").enumerate() {
         if index > 0 {
             line.push_span(" · ".set_style(secondary_text_style()));
         }
-        if let Some((keys, action)) = [" to switch", " to close", " for side"]
-            .into_iter()
-            .find_map(|action| part.strip_suffix(action).map(|keys| (keys, action)))
+        if let Some((keys, action)) = [
+            crate::i18n::tr!("footer-switch-hint", " to switch"),
+            crate::i18n::tr!("footer-close-hint", " to close"),
+            crate::i18n::tr!("footer-side-hint", " for side"),
+        ]
+        .into_iter()
+        .find_map(|action| part.strip_suffix(action).map(|keys| (keys, action)))
         {
             line.extend(key_hint::key_label_spans(keys));
             line.push_span(action.set_style(secondary_text_style()));
@@ -779,9 +856,13 @@ fn footer_from_props_lines(
         FooterMode::QuitShortcutReminder => {
             vec![quit_shortcut_reminder_line(props.quit_shortcut_key)]
         }
-        FooterMode::HistorySearch => {
-            vec![Line::from("reverse-i-search: ").set_style(secondary_text_style())]
-        }
+        FooterMode::HistorySearch => vec![
+            Line::from(footer_text(
+                "footer-history-search-prompt",
+                "reverse-i-search: ",
+            ))
+            .set_style(secondary_text_style()),
+        ],
         FooterMode::ComposerEmpty => {
             let state = LeftSideState {
                 hint: if show_shortcuts_hint {
@@ -852,7 +933,9 @@ pub(crate) fn passive_footer_status_line(props: &FooterProps) -> Option<Line<'st
     {
         line.push_span(" · ".set_style(secondary_text_style()));
         line.extend(key.spans());
-        line.push_span(" for agents".set_style(secondary_text_style()));
+        line.push_span(
+            crate::i18n::tr!("footer-agents-hint", " for agents").set_style(secondary_text_style()),
+        );
     }
 
     line
@@ -930,7 +1013,9 @@ pub(crate) fn footer_hint_items_line(items: &[(String, String)]) -> Line<'static
 
 fn quit_shortcut_reminder_line(key: KeyBinding) -> Line<'static> {
     let mut line = Line::from(key.spans());
-    line.push_span(" again to quit".set_style(secondary_text_style()));
+    line.push_span(
+        footer_text("footer-again-to-quit", " again to quit").set_style(secondary_text_style()),
+    );
     line
 }
 
@@ -938,13 +1023,22 @@ fn esc_hint_line(esc_backtrack_hint: bool) -> Line<'static> {
     let esc = key_hint::plain(KeyCode::Esc);
     if esc_backtrack_hint {
         let mut line = Line::from(esc.spans());
-        line.push_span(" again to edit previous message".set_style(secondary_text_style()));
+        line.push_span(
+            footer_text(
+                "footer-again-to-edit-previous",
+                " again to edit previous message",
+            )
+            .set_style(secondary_text_style()),
+        );
         line
     } else {
         let mut line = Line::from(esc.spans());
         line.push_span(" ".set_style(secondary_text_style()));
         line.extend(esc.spans());
-        line.push_span(" to edit previous message".set_style(secondary_text_style()));
+        line.push_span(
+            footer_text("footer-to-edit-previous", " to edit previous message")
+                .set_style(secondary_text_style()),
+        );
         line
     }
 }
@@ -952,27 +1046,39 @@ fn esc_hint_line(esc_backtrack_hint: bool) -> Line<'static> {
 pub(crate) fn context_window_line(percent: Option<i64>, used_tokens: Option<i64>) -> Line<'static> {
     if let Some(percent) = percent {
         let percent = percent.clamp(0, 100);
-        return Line::from(vec![
-            Span::from(format!("{percent}% context left")).set_style(secondary_text_style()),
-        ]);
+        let text = crate::i18n::global().text_with_string_arg(
+            "footer-context-remaining",
+            "percent",
+            percent.to_string(),
+            || format!("{percent}% context left"),
+        );
+        return Line::from(vec![Span::from(text).set_style(secondary_text_style())]);
     }
 
     if let Some(tokens) = used_tokens {
         let used_fmt = format_tokens_compact(tokens);
-        return Line::from(vec![
-            Span::from(format!("{used_fmt} used")).set_style(secondary_text_style()),
-        ]);
+        let text = crate::i18n::global().text_with_string_arg(
+            "footer-tokens-used",
+            "tokens",
+            used_fmt.as_str(),
+            || format!("{used_fmt} used"),
+        );
+        return Line::from(vec![Span::from(text).set_style(secondary_text_style())]);
     }
 
-    Line::from(vec![
-        Span::from("100% context left").set_style(secondary_text_style()),
-    ])
+    let text = crate::i18n::global().text_with_string_arg(
+        "footer-context-remaining",
+        "percent",
+        "100",
+        || "100% context left".to_string(),
+    );
+    Line::from(vec![Span::from(text).set_style(secondary_text_style())])
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::status_line_style::fit_status_line_to_width;
     use super::*;
-    use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
     use crate::test_backend::VT100Backend;
     use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
@@ -1083,9 +1189,9 @@ mod tests {
                         props.mode,
                         FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft
                     ) {
-                    passive_status_line.as_ref().map(|line| {
-                        truncate_line_with_ellipsis_if_overflow(line.clone(), available_width)
-                    })
+                    passive_status_line
+                        .as_ref()
+                        .map(|line| fit_status_line_to_width(line.clone(), available_width))
                 } else {
                     None
                 };
@@ -1132,9 +1238,9 @@ mod tests {
                 if status_line_active
                     && let Some(max_left) = max_left_width_for_right(area, right_width)
                     && left_width > max_left
-                    && let Some(line) = passive_status_line.as_ref().map(|line| {
-                        truncate_line_with_ellipsis_if_overflow(line.clone(), max_left as usize)
-                    })
+                    && let Some(line) = passive_status_line
+                        .as_ref()
+                        .map(|line| fit_status_line_to_width(line.clone(), max_left as usize))
                 {
                     left_width = line.width() as u16;
                     truncated_status_line = Some(line);

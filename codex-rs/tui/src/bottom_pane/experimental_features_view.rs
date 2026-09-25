@@ -34,7 +34,7 @@ use crate::keymap::ListAction;
 use crate::keymap::ListKeymap;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
-use crate::style::user_message_style;
+use crate::style::menu_surface_style;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -43,6 +43,10 @@ use super::picker_rows::render_rows;
 use super::popup_consts::MAX_POPUP_ROWS;
 use super::scroll_state::ScrollState;
 use super::selection_popup_common::GenericDisplayRow;
+
+fn experimental_text(key: &str, english: &'static str) -> String {
+    crate::i18n::global().text(key, None, || english.to_string())
+}
 
 pub(crate) struct ExperimentalFeatureItem {
     pub key: String,
@@ -78,7 +82,7 @@ impl ExperimentalFeaturesView {
     ) -> Self {
         let mut view = Self {
             discovery_status: if catalog_rx.is_some() {
-                "Loading server experiments…"
+                crate::i18n::tr!("experimental-loading", "Loading server experiments…")
             } else {
                 ""
             }
@@ -103,10 +107,13 @@ impl ExperimentalFeaturesView {
     fn header(&self, width: u16) -> impl Renderable {
         let mut header = ColumnRenderable::new();
         header.push(
-            Paragraph::new(Line::from("Experimental features".bold())).wrap(Wrap { trim: false }),
+            Paragraph::new(Line::from(
+                crate::i18n::tr!("experimental-features-title", "Experimental features").bold(),
+            ))
+            .wrap(Wrap { trim: false }),
         );
         for text in [
-            "Checked features are configured on. Some experimental features take effect only in new tasks or after restarting the Codex server.",
+            crate::i18n::tr!("experimental-configured-hint", "Checked features are configured on. Some experimental features take effect only in new tasks or after restarting the Codex server."),
             self.discovery_status.as_str(),
         ].into_iter().filter(|text| !text.is_empty()) {
             for line in textwrap::wrap(text, usize::from(width.max(1))) {
@@ -126,9 +133,15 @@ impl ExperimentalFeaturesView {
 
     fn current_hint(&self) -> Line<'static> {
         if self.write_rx.is_some() {
-            Line::from("Saving… Closing this popup will not cancel the write.")
+            Line::from(crate::i18n::tr!(
+                "experimental-saving-hint",
+                "Saving… Closing this popup will not cancel the write."
+            ))
         } else if !self.unconfirmed.is_empty() {
-            Line::from("Selections retained. Save to retry, or cancel to close.")
+            Line::from(crate::i18n::tr!(
+                "experimental-retained-hint",
+                "Selections retained. Save to retry, or cancel to close."
+            ))
         } else {
             self.footer_hint.clone()
         }
@@ -148,13 +161,29 @@ impl ExperimentalFeaturesView {
                 ' '
             };
             let marker = if item.enabled { 'x' } else { ' ' };
-            let read_only = if item.writable { "" } else { " (read-only)" };
-            let name = format!("{prefix} [{marker}] {}{read_only}", item.name);
+            let read_only = if item.writable {
+                ""
+            } else {
+                crate::i18n::tr!("experimental-read-only", " (read-only)")
+            };
+            let localizer = crate::i18n::global();
+            let feature_key = item.key.replace('_', "-");
+            let label = localizer.text(
+                &format!("experimental-feature-{feature_key}-name"),
+                None,
+                || item.name.clone(),
+            );
+            let description = localizer.text(
+                &format!("experimental-feature-{feature_key}-description"),
+                None,
+                || item.description.clone(),
+            );
+            let name = format!("{prefix} [{marker}] {label}{read_only}");
             rows.push(GenericDisplayRow {
                 selection_style: Some(super::picker_style::selection_style()),
                 wrap_indent: Some(6),
                 name,
-                description: Some(item.description.clone()),
+                description: Some(description),
                 is_disabled: !item.writable || self.write_rx.is_some(),
                 ..Default::default()
             });
@@ -260,7 +289,9 @@ impl ExperimentalFeaturesView {
             // A failed response can follow a committed write. Keep these keys dirty
             // so reverting to the old baseline still sends a corrective write.
             self.unconfirmed = updates.iter().map(|(key, _)| key.clone()).collect();
-            self.discovery_status = "Saving experimental features…".to_string();
+            self.discovery_status =
+                crate::i18n::tr!("experimental-saving", "Saving experimental features…")
+                    .to_string();
             self.app_event_tx.send(AppEvent::SaveExperimentalFeatures {
                 thread_id: self.thread_id,
                 updates,
@@ -278,10 +309,11 @@ impl BottomPaneView for ExperimentalFeaturesView {
             let result = match receiver.try_recv() {
                 Ok(result) => result,
                 Err(oneshot::error::TryRecvError::Empty) => return false,
-                Err(oneshot::error::TryRecvError::Closed) => Err(
+                Err(oneshot::error::TryRecvError::Closed) => Err(crate::i18n::tr!(
+                    "experimental-save-interrupted",
                     "Saving was interrupted. Reopen /experimental to check configured values."
-                        .to_string(),
-                ),
+                )
+                .to_string()),
             };
             self.write_rx = None;
             match result {
@@ -316,9 +348,11 @@ impl BottomPaneView for ExperimentalFeaturesView {
         let result = match receiver.try_recv() {
             Ok(result) => result,
             Err(oneshot::error::TryRecvError::Empty) => return false,
-            Err(oneshot::error::TryRecvError::Closed) => {
-                Err("Discovery was interrupted".to_string())
-            }
+            Err(oneshot::error::TryRecvError::Closed) => Err(crate::i18n::tr!(
+                "experimental-discovery-interrupted",
+                "Discovery was interrupted"
+            )
+            .to_string()),
         };
         self.catalog_rx = None;
         match result {
@@ -350,7 +384,7 @@ impl BottomPaneView for ExperimentalFeaturesView {
                     count += 1;
                 }
                 self.discovery_status = if count == 0 {
-                    "No server experiments available."
+                    crate::i18n::tr!("experimental-none", "No server experiments available.")
                 } else {
                     ""
                 }
@@ -359,7 +393,7 @@ impl BottomPaneView for ExperimentalFeaturesView {
             }
             Err(error) => {
                 tracing::warn!(%error, "experimental feature discovery failed");
-                self.discovery_status = "Server experiments unavailable. Reopen /experimental to retry; restart this Codex client if requests remain unanswered.".to_string();
+                self.discovery_status = crate::i18n::tr!("experimental-unavailable", "Server experiments unavailable. Reopen /experimental to retry; restart this Codex client if requests remain unanswered.").to_string();
             }
         }
         true
@@ -432,7 +466,7 @@ impl Renderable for ExperimentalFeaturesView {
         .areas(area);
 
         Block::default()
-            .style(user_message_style())
+            .style(menu_surface_style())
             .render(content_area, buf);
 
         let header = self.header(content_area.width.saturating_sub(4));
@@ -452,7 +486,10 @@ impl Renderable for ExperimentalFeaturesView {
                 &rows,
                 &self.state,
                 MAX_POPUP_ROWS,
-                "  No experimental features available for now",
+                &experimental_text(
+                    "experimental-features-empty",
+                    "  No experimental features available for now",
+                ),
             );
         }
 
@@ -484,16 +521,19 @@ impl Renderable for ExperimentalFeaturesView {
 }
 
 fn experimental_popup_hint_line(keymap: &ListKeymap) -> Line<'static> {
-    let mut spans = vec![key_hint::plain(KeyCode::Char(' ')).into(), " toggle".into()];
+    let mut spans = vec![
+        key_hint::plain(KeyCode::Char(' ')).into(),
+        crate::i18n::tr!("experimental-toggle-hint", " toggle").into(),
+    ];
     if let Some(accept) = keymap.primary_hint(ListAction::Accept) {
         spans.push(" · ".into());
         spans.extend(accept.spans());
-        spans.push(" save".into());
+        spans.push(crate::i18n::tr!("experimental-save-hint", " save").into());
     }
     if let Some(cancel) = keymap.primary_hint(ListAction::Cancel) {
         spans.push(" · ".into());
         spans.extend(cancel.spans());
-        spans.push(" save/close".into());
+        spans.push(crate::i18n::tr!("experimental-close-hint", " save/close").into());
     }
     Line::from(spans)
 }

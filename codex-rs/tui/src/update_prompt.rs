@@ -1,6 +1,6 @@
 //! Shared picker presentation for the installed CLI's update choices.
 //! Update discovery and execution remain disabled in debug builds.
-
+#![cfg_attr(test, allow(dead_code))]
 #![cfg(any(not(debug_assertions), test))]
 
 use crate::bottom_pane::picker_option_list;
@@ -21,6 +21,7 @@ use crate::tui::TuiEvent;
 use crate::update_action::UpdateAction;
 #[cfg(not(debug_assertions))]
 use crate::updates;
+use crate::version::CODEX_CLI_VERSION;
 #[cfg(not(debug_assertions))]
 use color_eyre::Result;
 use crossterm::event::KeyCode;
@@ -59,8 +60,11 @@ pub(crate) async fn run_update_prompt_if_needed(
         return Ok(UpdatePromptOutcome::Continue);
     };
 
-    let mut screen =
-        UpdatePromptScreen::new(tui.frame_requester(), latest_version.clone(), update_action);
+    let mut screen = UpdatePromptScreen::new(
+        tui.frame_requester(),
+        latest_version.clone(),
+        update_action.clone(),
+    );
     tui.draw(u16::MAX, |frame| {
         frame.render_widget_ref(&screen, frame.area());
     })?;
@@ -123,10 +127,14 @@ impl UpdatePromptScreen {
         latest_version: String,
         update_action: UpdateAction,
     ) -> Self {
+        let current_version = update_action.ccu_prompt_details().map_or_else(
+            || CODEX_CLI_VERSION.to_string(),
+            |(current, _)| current.to_string(),
+        );
         Self {
             request_frame,
             latest_version,
-            current_version: env!("CARGO_PKG_VERSION").to_string(),
+            current_version,
             update_action,
             highlighted: UpdateSelection::UpdateNow,
             selection: None,
@@ -206,6 +214,11 @@ impl WidgetRef for &UpdatePromptScreen {
         let mut column = FlexRenderable::new();
 
         let update_command = self.update_action.command_str();
+        let ccu_details = self.update_action.ccu_prompt_details();
+        let managed_by_ccu = ccu_details.is_some();
+        let release_notes_url = ccu_details
+            .map(|(_, release_url)| release_url)
+            .unwrap_or(RELEASE_NOTES_URL);
 
         column.push(/*flex*/ 1, RenderableItem::Borrowed(&""));
         column.push(
@@ -227,7 +240,7 @@ impl WidgetRef for &UpdatePromptScreen {
             /*flex*/ 1,
             Paragraph::new(Line::from(vec![
                 "Release notes: ".dim(),
-                RELEASE_NOTES_URL.dim().underlined(),
+                release_notes_url.dim().underlined(),
             ]))
             .wrap(Wrap { trim: false })
             .inset(Insets::vh(/*v*/ 0, /*h*/ 2)),
@@ -241,7 +254,12 @@ impl WidgetRef for &UpdatePromptScreen {
             /*flex*/ 1,
             picker_option_list(
                 vec![
-                    format!("Update now (runs `{update_command}`)"),
+                    if managed_by_ccu {
+                        crate::i18n::global()
+                            .text("ccu-update-now", None, || "Open CCU updater".to_string())
+                    } else {
+                        format!("Update now (runs `{update_command}`)")
+                    },
                     "Skip".to_string(),
                     "Skip until next version".to_string(),
                 ],
@@ -266,7 +284,7 @@ impl WidgetRef for &UpdatePromptScreen {
         };
         render_menu_surface(panel, buf);
         column.render(panel, buf);
-        crate::terminal_hyperlinks::mark_underlined_hyperlink(buf, area, RELEASE_NOTES_URL);
+        crate::terminal_hyperlinks::mark_underlined_hyperlink(buf, area, release_notes_url);
     }
 }
 
@@ -290,6 +308,20 @@ mod tests {
         )
     }
 
+    fn new_ccu_prompt() -> UpdatePromptScreen {
+        UpdatePromptScreen::new(
+            FrameRequester::test_dummy(),
+            "0.1.5".into(),
+            UpdateAction::CcuManager {
+                manager_path: r"C:\ccu\bin\ccu-manager.exe".to_string(),
+                current_version: "0.1.4".to_string(),
+                target_version: "0.1.5".to_string(),
+                release_url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.5"
+                    .to_string(),
+            },
+        )
+    }
+
     #[test]
     fn update_prompt_snapshot() {
         let screen = new_prompt();
@@ -299,6 +331,16 @@ mod tests {
             .draw(|frame| frame.render_widget_ref(&screen, frame.area()))
             .expect("render update prompt");
         insta::assert_snapshot!("update_prompt_modal", terminal.backend());
+    }
+
+    #[test]
+    fn ccu_update_prompt_snapshot() {
+        let screen = new_ccu_prompt();
+        let mut terminal = Terminal::new(VT100Backend::new(88, 12)).expect("terminal");
+        terminal
+            .draw(|frame| frame.render_widget_ref(&screen, frame.area()))
+            .expect("render CCU update prompt");
+        insta::assert_snapshot!("ccu_update_prompt_modal", terminal.backend());
     }
 
     #[test]

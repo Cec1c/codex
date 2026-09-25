@@ -99,7 +99,13 @@ pub(super) fn render_popup(
         .iter()
         .position(|mode| *mode == search_mode)
         .unwrap_or_default();
-    render_filled_tab_bar(&modes.map(SearchMode::label), active, inset(tabs), buf);
+    let labels = modes.map(SearchMode::label);
+    render_filled_tab_bar(
+        &labels.each_ref().map(String::as_str),
+        active,
+        inset(tabs),
+        buf,
+    );
     let query = if query.is_empty() {
         "Type to search mentions"
     } else {

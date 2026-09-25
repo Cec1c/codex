@@ -28,7 +28,13 @@ impl Report {
         let parse = |value: &str| {
             DateTime::parse_from_rfc3339(value)
                 .map(|date| date.with_timezone(&Utc))
-                .map_err(|_| "Invalid plan history timestamp.".to_string())
+                .map_err(|_| {
+                    crate::i18n::tr!(
+                        "analytics-invalid-plan-time",
+                        "Invalid plan history timestamp."
+                    )
+                    .to_string()
+                })
         };
         let Some(as_of) = history.data_as_of.as_deref().map(parse).transpose()? else {
             return Ok(None);
@@ -36,13 +42,23 @@ impl Report {
         let mut periods = [Vec::new(), Vec::new()];
         let mut ids = std::collections::HashSet::new();
         if history.periods.len() > 1_000 {
-            return Err("Plan history contains too many periods.".into());
+            return Err(crate::i18n::tr!(
+                "analytics-too-many-periods",
+                "Plan history contains too many periods."
+            )
+            .into());
         }
         for period in history.periods {
             let window = match period.window_minutes {
                 300 => 0,
                 10080 => 1,
-                _ => return Err("Unsupported plan history window.".into()),
+                _ => {
+                    return Err(crate::i18n::tr!(
+                        "analytics-unsupported-window",
+                        "Unsupported plan history window."
+                    )
+                    .into());
+                }
             };
             let start = parse(&period.starts_at)?;
             let end = parse(&period.ends_at)?;
@@ -58,7 +74,11 @@ impl Report {
                     .flat_map(|group| &group.rows)
                     .any(|row| !row.basis_points.is_finite())
             {
-                return Err("Invalid plan history period.".into());
+                return Err(crate::i18n::tr!(
+                    "analytics-invalid-period",
+                    "Invalid plan history period."
+                )
+                .into());
             }
             periods[window].push(Period {
                 id: period.id,

@@ -1,0 +1,16 @@
+---
+source: tui/src/bottom_pane/warnings_view_tests.rs
+expression: "draw(&view, width, 12)"
+---
+  警 告  · 1 / 1 · 启 动
+
+  此 终 端 不 允 许 启 动 独 立 后 台 服 务 ， 将 在 当
+  前 进 程 中 继 续 运 行 ； 退 出  Codex 时 任 务
+  会 停 止 。
+
+
+
+
+
+
+  esc 返 回  · ctrl+o 复 制  · ↓ 滚 动
