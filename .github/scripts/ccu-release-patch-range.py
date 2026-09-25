@@ -27,6 +27,7 @@ def release_patch_commits(base: str, source: str) -> list[str]:
             for path in paths
             if not path.startswith("codex-rs/")
             and path != ".github/scripts/ccu-package-release.ps1"
+            and path != ".github/scripts/ccu-package-runtime.py"
         ]
         if invalid:
             raise ValueError(f"Published patch changes paths outside the release allowlist: {invalid}")

@@ -34,6 +34,10 @@ param(
     [Parameter(Mandatory)]
     [string]$CodeModeHostBinaryPath,
 
+    [string]$UpstreamPackageArchivePath,
+
+    [string]$UpstreamPackageChecksumsPath,
+
     [Parameter(Mandatory)]
     [string]$OutputDirectory
 )
@@ -135,7 +139,19 @@ foreach ($path in @($assetPath, "$assetPath.sha256", $manifestPath, "$manifestPa
 New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
 Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $packageRoot $binaryName)
 Copy-Item -LiteralPath $CodeModeHostBinaryPath -Destination (Join-Path $packageRoot $codeModeHostName)
-Compress-Archive -LiteralPath (Join-Path $stagingRoot 'package') -DestinationPath $assetPath -CompressionLevel Optimal
+if ([version]$UpstreamVersion -ge [version]'0.157.0') {
+    if (-not $UpstreamPackageArchivePath -or -not $UpstreamPackageChecksumsPath) {
+        throw 'Codex 0.157+ requires the checksum-verified complete upstream runtime package'
+    }
+    & python (Join-Path $PSScriptRoot 'ccu-package-runtime.py') `
+        --archive $UpstreamPackageArchivePath --checksums $UpstreamPackageChecksumsPath `
+        --binary $BinaryPath --host $CodeModeHostBinaryPath --output $assetPath `
+        --upstream-version $UpstreamVersion --version $DisplayVersion --target $target
+    if ($LASTEXITCODE -ne 0) { throw 'Complete runtime assembly failed' }
+}
+else {
+    Compress-Archive -LiteralPath (Join-Path $stagingRoot 'package') -DestinationPath $assetPath -CompressionLevel Optimal
+}
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($assetPath)
