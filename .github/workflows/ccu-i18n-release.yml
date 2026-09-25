@@ -365,7 +365,6 @@ jobs:
                   jq -r --arg title "$title" '.[] | select(.title == $title) | .number' |
                   head -n 1
               )"
-              unchanged_conflict=false
               if [[ -z "$issue_number" ]]; then
                 issue_url="$(
                   gh issue create --repo "$GITHUB_REPOSITORY" \
@@ -379,12 +378,10 @@ jobs:
                   gh issue view "$issue_number" --repo "$GITHUB_REPOSITORY" \
                     --json body --jq .body
                 )"
-                if grep -Fq -- \
+                if ! grep -Fq -- \
                   "<!-- ccu-sync-conflict-fingerprint:$conflict_fingerprint -->" \
                   <<<"$existing_body"
                 then
-                  unchanged_conflict=true
-                else
                   gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
                     --body-file "$body_file" \
                     --add-label ccu-sync-conflict

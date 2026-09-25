@@ -42,11 +42,9 @@ def main() -> None:
     duplicate_conflict_markers = [
         'conflict_fingerprint="$(',
         'echo "<!-- ccu-sync-conflict-fingerprint:$conflict_fingerprint -->"',
-        "unchanged_conflict=false",
         'gh issue view "$issue_number"',
-        'if grep -Fq --',
-        'unchanged_conflict=true',
-        'else\n                  gh issue edit "$issue_number"',
+        'if ! grep -Fq --',
+        'then\n                  gh issue edit "$issue_number"',
         'if [[ "$GITHUB_EVENT_NAME" == "schedule"',
         "skipping duplicate resolver dispatch",
         "gh workflow run ccu-conflict-resolver.lock.yml",
