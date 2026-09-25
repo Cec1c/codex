@@ -22,9 +22,12 @@ impl AnalyticsView {
         let width = row_width.saturating_sub(/*rhs*/ 1).max(/*other*/ 1);
         let wrap = |lines: Vec<Line<'static>>| word_wrap_lines(lines, RtOptions::new(width));
         let mut lines = wrap(vec![
-            "Active in past 30 days · sorted by lifetime credits"
-                .set_style(secondary_style())
-                .into(),
+            crate::i18n::tr!(
+                "analytics-recent-sorted",
+                "Active in past 30 days · sorted by lifetime credits"
+            )
+            .set_style(secondary_style())
+            .into(),
         ]);
         if let Some(message) = self.chats.message() {
             lines.extend(wrap(vec![
@@ -36,7 +39,9 @@ impl AnalyticsView {
         };
         if chats.rows.is_empty() {
             lines.extend(wrap(vec![
-                "No recent local chats.".set_style(secondary_style()).into(),
+                crate::i18n::tr!("analytics-no-chats", "No recent local chats.")
+                    .set_style(secondary_style())
+                    .into(),
             ]));
             return (lines, 0..1);
         }
@@ -59,13 +64,15 @@ impl AnalyticsView {
         });
         let stacked_amounts = show_usd && width < 70;
         lines.extend(wrap(vec![columns(
-            "  Chat".bold().into(),
+            crate::i18n::tr!("analytics-chat-column", "  Chat")
+                .bold()
+                .into(),
             if stacked_amounts {
-                "Est. $ / credits"
+                crate::i18n::tr!("analytics-usd-credits", "Est. $ / credits")
             } else if show_usd {
-                "Est. $ spent  Lifetime credits"
+                crate::i18n::tr!("analytics-spent-credits", "Est. $ spent  Lifetime credits")
             } else {
-                "Lifetime credits"
+                crate::i18n::tr!("analytics-lifetime-credits", "Lifetime credits")
             }
             .bold()
             .into(),
@@ -167,27 +174,41 @@ impl AnalyticsView {
                             if table {
                                 format!(
                                     "  {:<model_width$}  {:<12}  {:<12}",
-                                    "Model",
-                                    "Effort",
-                                    "Speed",
+                                    crate::i18n::tr!("ui-model", "Model"),
+                                    crate::i18n::tr!("analytics-effort", "Effort"),
+                                    crate::i18n::tr!("analytics-speed", "Speed"),
                                     model_width = width - 46
                                 )
                                 .set_style(secondary_style())
                                 .into()
                             } else {
-                                "  Model / effort / speed"
-                                    .set_style(secondary_style())
-                                    .into()
+                                crate::i18n::tr!(
+                                    "analytics-model-effort-speed",
+                                    "  Model / effort / speed"
+                                )
+                                .set_style(secondary_style())
+                                .into()
                             },
-                            "Credits".bold().into(),
+                            crate::i18n::tr!("analytics-credits", "Credits")
+                                .bold()
+                                .into(),
                             width,
                         ));
                     }
                     for group in groups {
                         let model =
-                            self.model_name(group.model.as_deref().unwrap_or("Not reported"));
-                        let effort = group.reasoning_effort.as_deref().unwrap_or("Not reported");
-                        let speed = group.speed.as_deref().unwrap_or("Not reported");
+                            self.model_name(group.model.as_deref().unwrap_or(crate::i18n::tr!(
+                                "analytics-not-reported",
+                                "Not reported"
+                            )));
+                        let effort = group
+                            .reasoning_effort
+                            .as_deref()
+                            .unwrap_or(crate::i18n::tr!("analytics-not-reported", "Not reported"));
+                        let speed = group
+                            .speed
+                            .as_deref()
+                            .unwrap_or(crate::i18n::tr!("analytics-not-reported", "Not reported"));
                         let amount = data::credits(group.estimated_usage_credits_micros);
                         let label = if table {
                             // Wrap long model names instead of hiding distinctions between groups.
@@ -229,9 +250,12 @@ impl AnalyticsView {
                     }
                     if usage.groups.is_empty() {
                         row.push(
-                            "  Breakdown unavailable"
-                                .set_style(secondary_style())
-                                .into(),
+                            crate::i18n::tr!(
+                                "analytics-breakdown-unavailable",
+                                "  Breakdown unavailable"
+                            )
+                            .set_style(secondary_style())
+                            .into(),
                         );
                     }
                     if zeros > 0 {
@@ -242,12 +266,12 @@ impl AnalyticsView {
                                 if self.show_zero_credit_groups {
                                     ""
                                 } else {
-                                    " hidden"
+                                    crate::i18n::tr!("analytics-hidden", " hidden")
                                 },
                                 if self.show_zero_credit_groups {
-                                    "hide zeros"
+                                    crate::i18n::tr!("analytics-hide-zeros", "hide zeros")
                                 } else {
-                                    "show all"
+                                    crate::i18n::tr!("analytics-show-all", "show all")
                                 },
                             )
                             .set_style(secondary_style())
@@ -269,9 +293,12 @@ impl AnalyticsView {
             })
             .collect::<Vec<_>>();
         let coverage = wrap(vec![
-            "Local chats · excludes archived chats and subagent usage"
-                .set_style(secondary_style())
-                .into(),
+            crate::i18n::tr!(
+                "analytics-local-scope",
+                "Local chats · excludes archived chats and subagent usage"
+            )
+            .set_style(secondary_style())
+            .into(),
         ]);
         self.chat_window(lines, rows, coverage, width)
     }
@@ -286,7 +313,12 @@ impl AnalyticsView {
         let wrap = |lines: Vec<Line<'static>>| word_wrap_lines(lines, RtOptions::new(width));
         let count = rows.len();
         let range_height = wrap(vec![
-            format!("Showing {count}–{count} of {count} chats").into(),
+            crate::i18n::tr_format!(
+                "analytics-chat-page",
+                "Showing {count}–{count} of {count} chats",
+                count = &count
+            )
+            .into(),
         ])
         .len();
         // Measure wrapped details before choosing neighbors so the range describes the rendered rows.
@@ -315,9 +347,15 @@ impl AnalyticsView {
         }
         lines.push(Line::default());
         lines.extend(wrap(vec![
-            format!("Showing {}–{end} of {count} chats", first + 1)
-                .set_style(secondary_style())
-                .into(),
+            crate::i18n::tr_format!(
+                "analytics-chat-page-range",
+                "Showing {value}–{end} of {count} chats",
+                value = first + 1,
+                end = &end,
+                count = &count
+            )
+            .set_style(secondary_style())
+            .into(),
         ]));
         lines.extend(coverage);
         (lines, selection)

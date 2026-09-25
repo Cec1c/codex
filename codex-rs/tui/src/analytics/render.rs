@@ -119,13 +119,15 @@ impl AnalyticsView {
                 | PlanType::EnterpriseCbpAutomation
                 | PlanType::EnterpriseCbpUsageBased => "Enterprise",
                 PlanType::Edu | PlanType::EduPlus | PlanType::EduPro => "Education",
-                PlanType::Unknown => "Account",
+                PlanType::Unknown => crate::i18n::tr!("analytics-account", "Account"),
             }
         });
         let heading = Line::from(vec![
-            plan.map(|plan| format!("Usage · {plan}"))
-                .unwrap_or_else(|| "Usage".into())
-                .bold(),
+            plan.map(|plan| {
+                crate::i18n::tr_format!("analytics-usage-plan", "Usage · {plan}", plan = &plan)
+            })
+            .unwrap_or_else(|| crate::i18n::tr!("analytics-usage", "Usage").into())
+            .bold(),
             account
                 .map(|account| format!(" · {account}"))
                 .unwrap_or_default()
@@ -170,10 +172,10 @@ impl AnalyticsView {
         let (lines, selection) = if self.show_help {
             (self.help_lines(width), 0..1)
         } else if visible.is_empty() {
-            let message = self
-                .account
-                .message()
-                .unwrap_or("Analytics is not available for this account type.");
+            let message = self.account.message().unwrap_or(crate::i18n::tr!(
+                "analytics-account-unsupported",
+                "Analytics is not available for this account type."
+            ));
             (
                 textwrap::wrap(message, width)
                     .into_iter()

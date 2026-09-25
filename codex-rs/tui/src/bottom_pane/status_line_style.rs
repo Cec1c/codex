@@ -7,6 +7,7 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 
 use super::status_line_setup::StatusLineItem;
+use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::render::highlight::foreground_style_for_scopes;
 use crate::style::readable_color_on;
 use crate::style::secondary_text_style;
@@ -44,13 +45,18 @@ impl StatusLineAccent {
             StatusLineItem::Status => Self::State,
             StatusLineItem::ContextRemaining
             | StatusLineItem::ContextUsed
+            | StatusLineItem::ContextTokens
             | StatusLineItem::ContextWindowSize
             | StatusLineItem::UsedTokens
             | StatusLineItem::TotalInputTokens
             | StatusLineItem::TotalOutputTokens
             | StatusLineItem::ThreadCredits
             | StatusLineItem::EstimatedThreadCost => Self::Usage,
-            StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit => Self::Limit,
+            StatusLineItem::ContextProgress => Self::Progress,
+            StatusLineItem::SessionTiming => Self::Metadata,
+            StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit | StatusLineItem::Quota => {
+                Self::Limit
+            }
             StatusLineItem::CodexVersion | StatusLineItem::Hostname | StatusLineItem::SessionId => {
                 Self::Metadata
             }
@@ -86,6 +92,17 @@ impl StatusLineAccent {
             Self::Branch | Self::Limit | Self::Thread => Style::default().magenta(),
         }
     }
+
+    fn ccu_role(self) -> &'static str {
+        match self {
+            Self::Model => "model",
+            Self::Usage => "usage",
+            Self::Progress => "progress",
+            Self::Limit => "quota",
+            Self::State | Self::Mode | Self::Metadata => "time",
+            Self::Path | Self::Branch | Self::Thread => "usage",
+        }
+    }
 }
 
 pub(crate) fn status_line_from_segments<I>(
@@ -96,11 +113,17 @@ pub(crate) fn status_line_from_segments<I>(
 where
     I: IntoIterator<Item = (StatusLineItem, String)>,
 {
-    status_line_from_segments_with_resolver(segments, use_theme_colors, thread_id, |accent| {
-        foreground_style_for_scopes(accent.scopes())
-    })
+    let ccu_theme = use_theme_colors.then(crate::ccu_theme::active).flatten();
+    status_line_from_segments_with_theme(
+        segments,
+        use_theme_colors,
+        thread_id,
+        |accent| foreground_style_for_scopes(accent.scopes()),
+        ccu_theme,
+    )
 }
 
+#[cfg(test)]
 fn status_line_from_segments_with_resolver<I, F>(
     segments: I,
     use_theme_colors: bool,
@@ -111,10 +134,40 @@ where
     I: IntoIterator<Item = (StatusLineItem, String)>,
     F: Fn(StatusLineAccent) -> Option<Style>,
 {
+    status_line_from_segments_with_theme(
+        segments,
+        use_theme_colors,
+        thread_id,
+        theme_style_for_accent,
+        None,
+    )
+}
+
+fn status_line_from_segments_with_theme<I, F>(
+    segments: I,
+    use_theme_colors: bool,
+    thread_id: Option<ThreadId>,
+    theme_style_for_accent: F,
+    ccu_theme: Option<&crate::ccu_theme::CcuTheme>,
+) -> Option<Line<'static>>
+where
+    I: IntoIterator<Item = (StatusLineItem, String)>,
+    F: Fn(StatusLineAccent) -> Option<Style>,
+{
     let mut spans = Vec::new();
+    let separator = ccu_theme
+        .map(super::super::ccu_theme::CcuTheme::separator)
+        .unwrap_or(STATUS_LINE_SEPARATOR);
     for (item, text) in segments {
         if !spans.is_empty() {
-            spans.push(STATUS_LINE_SEPARATOR.set_style(secondary_text_style()));
+            spans.push(
+                ccu_theme
+                    .and_then(|theme| theme.status_style("separator"))
+                    .map_or_else(
+                        || Span::from(separator.to_string()).set_style(secondary_text_style()),
+                        |style| Span::styled(separator.to_string(), style),
+                    ),
+            );
         }
         let style = if use_theme_colors
             && matches!(
@@ -126,9 +179,15 @@ where
             Style::default().fg(thread_color(thread_id))
         } else if use_theme_colors {
             let accent = StatusLineAccent::for_item(item);
-            soften_status_line_style(
-                theme_style_for_accent(accent).unwrap_or_else(|| accent.fallback_style()),
-            )
+            let style = ccu_theme
+                .and_then(|theme| theme.status_style(accent.ccu_role()))
+                .or_else(|| theme_style_for_accent(accent))
+                .unwrap_or_else(|| accent.fallback_style());
+            if ccu_theme.is_none_or(crate::ccu_theme::CcuTheme::soften_status_line_colors) {
+                soften_status_line_style(style)
+            } else {
+                style
+            }
         } else {
             secondary_text_style()
         };
@@ -145,10 +204,75 @@ where
         } else {
             style
         };
+        if let Some(theme) = ccu_theme.filter(|theme| theme.claude_layout()) {
+            if item == StatusLineItem::EstimatedThreadCost {
+                spans.push(Span::styled(
+                    text,
+                    theme.status_style("quota").unwrap_or(style),
+                ));
+                continue;
+            }
+            if item == StatusLineItem::ContextProgress
+                && let Some(percent) = text
+                    .rsplit_once(' ')
+                    .and_then(|(_, value)| value.strip_suffix('%'))
+                    .and_then(|value| value.parse::<u8>().ok())
+            {
+                spans.extend(theme.progress_spans(percent));
+                continue;
+            }
+            if item == StatusLineItem::SessionTiming
+                && let Some((elapsed, active)) = text.split_once('⚡')
+            {
+                spans.push(Span::styled(elapsed.to_string(), style));
+                spans.push(Span::styled(
+                    format!("⚡{active}"),
+                    theme.status_style("activeTime").unwrap_or(style),
+                ));
+                continue;
+            }
+            if matches!(
+                item,
+                StatusLineItem::Permissions | StatusLineItem::ApprovalMode
+            ) {
+                spans.push(Span::styled(
+                    text,
+                    theme.status_style("permissions").unwrap_or(style),
+                ));
+                continue;
+            }
+        }
         spans.push(Span::styled(text, style));
     }
 
     (!spans.is_empty()).then(|| Line::from(spans))
+}
+
+/// Fits a structured status line by removing complete trailing segments before truncating text.
+///
+/// Values can contain several styled spans. Remove at separator boundaries to avoid
+/// half-visible progress bars or timers on narrow terminals. The default CCU order
+/// intentionally places progressively less essential items to the right.
+pub(crate) fn fit_status_line_to_width(mut line: Line<'static>, max_width: usize) -> Line<'static> {
+    if line.width() <= max_width {
+        return line;
+    }
+
+    let separator = crate::ccu_theme::active()
+        .map(crate::ccu_theme::CcuTheme::separator)
+        .unwrap_or(" │ ");
+    while let Some(index) = line
+        .spans
+        .iter()
+        .rposition(|span| span.content == separator || span.content == STATUS_LINE_SEPARATOR)
+    {
+        line.spans.truncate(index);
+        if line.width() <= max_width {
+            return line;
+        }
+    }
+
+    truncate_line_with_ellipsis_if_overflow(line, max_width)
 }
 
 fn soften_status_line_style(mut style: Style) -> Style {
@@ -209,6 +333,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use ratatui::style::Modifier;
+    use ratatui::style::Stylize;
 
     fn line_text(line: &Line<'static>) -> String {
         line.spans
@@ -386,5 +511,69 @@ mod tests {
             line.render(area, &mut buffer);
             insta::assert_snapshot!(format!("{buffer:?}"));
         });
+    }
+
+    #[test]
+    fn responsive_status_line_drops_complete_trailing_segments() {
+        let line = Line::from(vec![
+            "🦊 gpt-5.6-sol[xhigh]".cyan(),
+            " │ ".dim(),
+            "42.7K/353K".green(),
+            " │ ".dim(),
+            "[█░░░░░░░░░] 9%".green(),
+            " │ ".dim(),
+            "⏱ 1s ⚡0s".cyan(),
+        ]);
+
+        let rendered = [72, 60, 40, 16]
+            .into_iter()
+            .map(|width| {
+                let fitted = fit_status_line_to_width(line.clone(), width);
+                format!("{width:>2}: {}", line_text(&fitted))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        insta::assert_snapshot!("ccu_status_line_responsive_widths", rendered);
+    }
+
+    #[test]
+    fn claude_status_line_preserves_colored_segments_at_narrow_widths() {
+        use ratatui::buffer::Buffer;
+        use ratatui::layout::Rect;
+        use ratatui::widgets::Widget;
+        let theme = crate::ccu_theme::parse_theme(
+            include_str!("../../assets/ccu-claude-theme.json"),
+            "rainbow_color",
+            1,
+        )
+        .expect("theme");
+        let line = status_line_from_segments_with_theme(
+            [
+                (
+                    StatusLineItem::ModelWithReasoning,
+                    "🐱 gpt-6-astra[high]".to_string(),
+                ),
+                (StatusLineItem::ContextTokens, "60.3K/1M".to_string()),
+                (StatusLineItem::ContextProgress, theme.progress(6)),
+                (StatusLineItem::SessionTiming, "⏱ 18s ⚡8s".to_string()),
+                (StatusLineItem::Quota, "15.00 CNY".to_string()),
+            ],
+            true,
+            None,
+            |_| None,
+            Some(&theme),
+        )
+        .expect("line");
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 120, 4));
+        for (y, width) in [120, 80, 55, 30].into_iter().enumerate() {
+            let fitted = fit_status_line_to_width(line.clone(), width);
+            let text = fitted.to_string();
+            assert!(!text.contains('[') || text.contains(']'));
+            assert!(!text.contains('⏱') || text.contains("⚡8s"));
+            assert!(!text.ends_with(" │ "));
+            fitted.render(Rect::new(0, y as u16, width as u16, 1), &mut buffer);
+        }
+        insta::assert_snapshot!(format!("{buffer:?}"));
     }
 }

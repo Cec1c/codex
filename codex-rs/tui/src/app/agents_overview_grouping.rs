@@ -16,7 +16,7 @@ pub(super) fn model_name(thread: &Thread) -> &str {
         .model
         .as_deref()
         .filter(|model| !model.is_empty())
-        .unwrap_or("Unknown")
+        .unwrap_or(crate::i18n::tr!("ui-unknown", "Unknown"))
 }
 
 impl AgentsOverviewView {

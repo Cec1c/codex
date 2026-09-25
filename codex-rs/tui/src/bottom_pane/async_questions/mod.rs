@@ -30,7 +30,8 @@ mod layout;
 mod render;
 mod state;
 
-const OTHER_OPTION_LABEL: &str = "Other";
+static OTHER_OPTION_LABEL: std::sync::LazyLock<&str> =
+    std::sync::LazyLock::new(|| crate::i18n::tr!("questions-other", "Other"));
 pub(super) const TIP_SEPARATOR: &str = "   ";
 pub(super) const DESIRED_SPACERS_BETWEEN_SECTIONS: u16 = 2;
 
@@ -86,7 +87,7 @@ impl AsyncQuestions {
             has_input_focus,
             app_event_tx.clone(),
             enhanced_keys_supported,
-            "Type your answer".into(),
+            crate::i18n::tr!("questions-type-answer", "Type your answer").into(),
             disable_paste_burst,
             ChatComposerConfig {
                 reset_vim_on_submission: false,
@@ -125,7 +126,12 @@ impl AsyncQuestions {
     pub(super) fn progress_prefix_text(&self) -> String {
         let current = self.state.current_idx + 1;
         let total = self.unanswered_count();
-        format!("{current} of {total}")
+        crate::i18n::tr_format!(
+            "questions-page",
+            "{current} of {total}",
+            current = &current,
+            total = &total
+        )
     }
 
     fn options(&self) -> &[String] {
@@ -240,11 +246,11 @@ impl AsyncQuestions {
         if self
             .options()
             .iter()
-            .any(|label| label.eq_ignore_ascii_case("Other"))
+            .any(|label| label.eq_ignore_ascii_case(crate::i18n::tr!("questions-other", "Other")))
         {
-            "Other (write an answer)"
+            crate::i18n::tr!("questions-write-answer", "Other (write an answer)")
         } else {
-            OTHER_OPTION_LABEL
+            *OTHER_OPTION_LABEL
         }
     }
 
@@ -252,7 +258,7 @@ impl AsyncQuestions {
         let text = if self.other_selected() {
             self.other_placeholder()
         } else {
-            "Type your answer"
+            crate::i18n::tr!("questions-type-answer", "Type your answer")
         };
         self.composer.set_placeholder_text(text.to_string());
     }

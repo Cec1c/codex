@@ -56,7 +56,10 @@ impl AnalyticsView {
             actions.push((self.hint(ListAction::Cancel), "back"));
         }
         let mut navigation = if self.show_help {
-            vec![("?".into(), "close help")]
+            vec![(
+                "?".into(),
+                crate::i18n::tr!("analytics-close-help", "close help"),
+            )]
         } else if self.visible_sections().is_empty() {
             vec![("R".into(), "retry")]
         } else {

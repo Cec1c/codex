@@ -106,7 +106,11 @@ impl Renderable for VoiceStrip {
             "◌".dark_gray()
         };
         let activity = format!(" {}", self.state.activity).into();
-        let mut status = Line::from(vec!["voice ".dim(), marker, activity]);
+        let mut status = Line::from(vec![
+            crate::i18n::tr!("voice-strip-label", "voice ").dim(),
+            marker,
+            activity,
+        ]);
         let mute = self.state.mute_hint.map_or_else(
             || "/voice mute".to_string(),
             |hint| {
@@ -116,7 +120,7 @@ impl Renderable for VoiceStrip {
                     if self.state.microphone_muted {
                         "unmute"
                     } else {
-                        "mute  "
+                        crate::i18n::tr!("voice-strip-mute", "mute  ")
                     }
                 )
             },
@@ -126,7 +130,8 @@ impl Renderable for VoiceStrip {
         let can_mute = !connecting || self.state.microphone_live || self.state.microphone_muted;
         if can_mute
             && available < status.width() + full_controls.width() + 1
-            && available >= "voice ".len() + full_controls.width() + 2
+            && available
+                >= crate::i18n::tr!("voice-strip-label", "voice ").len() + full_controls.width() + 2
         {
             status.spans.pop();
         }
@@ -146,9 +151,9 @@ impl Renderable for VoiceStrip {
         if show_full_controls && let Some(hint) = self.state.mute_hint {
             status.spans.extend(hint.spans());
             status.spans.push(if self.state.microphone_muted {
-                " unmute   /voice stop".dim()
+                crate::i18n::tr!("voice-strip-unmute-command", " unmute   /voice stop").dim()
             } else {
-                " mute     /voice stop".dim()
+                crate::i18n::tr!("voice-strip-mute-command", " mute     /voice stop").dim()
             });
         } else {
             status.spans.push(controls.dim());
@@ -162,7 +167,7 @@ impl Renderable for VoiceStrip {
             .saturating_div(/*rhs*/ 2)
             .min(/*other*/ 6);
         let mut meters = Vec::with_capacity(meter_width * 2 + 2);
-        meters.push("  mic ".dim());
+        meters.push(crate::i18n::tr!("voice-strip-mic", "  mic ").dim());
         append_voice_history(
             &mut meters,
             &self.state.microphone_history,

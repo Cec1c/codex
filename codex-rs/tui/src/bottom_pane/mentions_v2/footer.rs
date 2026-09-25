@@ -13,10 +13,22 @@ use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 pub(super) fn render_footer(area: Rect, buf: &mut Buffer) {
     let mut spans = Vec::new();
     for (keys, label) in [
-        (vec![KeyCode::Enter, KeyCode::Tab], " insert · "),
-        (vec![KeyCode::Esc], " close · "),
-        (vec![KeyCode::Up, KeyCode::Down], " select · "),
-        (vec![KeyCode::Left, KeyCode::Right], " filter"),
+        (
+            vec![KeyCode::Enter, KeyCode::Tab],
+            crate::i18n::tr!("mention-insert-segment", " insert · "),
+        ),
+        (
+            vec![KeyCode::Esc],
+            crate::i18n::tr!("mention-close-segment", " close · "),
+        ),
+        (
+            vec![KeyCode::Up, KeyCode::Down],
+            crate::i18n::tr!("mention-select-segment", " select · "),
+        ),
+        (
+            vec![KeyCode::Left, KeyCode::Right],
+            crate::i18n::tr!("mention-filter-segment", " filter"),
+        ),
     ] {
         let keys = keys
             .into_iter()

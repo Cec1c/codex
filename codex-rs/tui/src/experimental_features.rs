@@ -43,9 +43,19 @@ pub(crate) fn fetch(
                         },
                     )
                     .await
-                    .map_err(|_| "Experimental feature request failed".to_string())?;
+                    .map_err(|_| {
+                        crate::i18n::tr!(
+                            "experimental-request-failed",
+                            "Experimental feature request failed"
+                        )
+                        .to_string()
+                    })?;
                 if response.data.len() > 100 {
-                    return Err("Experimental feature page exceeds requested limit".to_string());
+                    return Err(crate::i18n::tr!(
+                        "experimental-page-limit",
+                        "Experimental feature page exceeds requested limit"
+                    )
+                    .to_string());
                 }
                 features.extend(
                     response
@@ -58,15 +68,23 @@ pub(crate) fn fetch(
                     return Ok(features);
                 };
                 if !cursors.insert(next.clone()) {
-                    return Err("Experimental feature pagination repeated a cursor".to_string());
+                    return Err(crate::i18n::tr!(
+                        "experimental-cursor-repeat",
+                        "Experimental feature pagination repeated a cursor"
+                    )
+                    .to_string());
                 }
             }
-            Err("Experimental feature discovery exceeded 10 pages".to_string())
+            Err(crate::i18n::tr!(
+                "experimental-page-count",
+                "Experimental feature discovery exceeded 10 pages"
+            )
+            .to_string())
         };
         tokio::select! {
             _ = response_tx.closed() => {},
             result = tokio::time::timeout(Duration::from_secs(/*secs*/ 5), discovery) => {
-                let result = result.unwrap_or_else(|_| Err("Experimental feature discovery timed out".to_string()));
+                let result = result.unwrap_or_else(|_| Err(crate::i18n::tr!("experimental-timeout", "Experimental feature discovery timed out").to_string()));
                 let _ = response_tx.send(result);
             }
         }
@@ -92,9 +110,12 @@ pub(crate) async fn write(
         "tui-experimental-save-readback",
         tx,
     );
-    let features = rx
-        .await
-        .map_err(|_| "Feature discovery was interrupted")??;
+    let features = rx.await.map_err(|_| {
+        crate::i18n::tr!(
+            "experimental-interrupted",
+            "Feature discovery was interrupted"
+        )
+    })??;
     let edits = updates
         .iter()
         .map(|(name, enabled)| {
@@ -102,7 +123,11 @@ pub(crate) async fn write(
                 .iter()
                 .find(|feature| feature.name == *name)
                 .ok_or_else(|| {
-                    format!("The server did not advertise experimental feature `{name}`")
+                    crate::i18n::tr_format!(
+                        "experimental-feature-unadvertised",
+                        "The server did not advertise experimental feature `{name}`",
+                        name = &name
+                    )
                 })?;
             // Quote the server's key as a single TOML path segment.
             let key = format!("features.{}", serde_json::json!(name));
@@ -128,8 +153,8 @@ pub(crate) async fn write(
                 reload_user_config: true,
             },
         })).await
-        .map_err(|_| "Saving experimental features timed out; the write may still finish. Reopen /experimental to check.")?
-        .map_err(|_| "Failed to save experimental features. Reopen /experimental to check configured values before retrying.")?;
+        .map_err(|_| crate::i18n::tr!("experimental-save-timeout", "Saving experimental features timed out; the write may still finish. Reopen /experimental to check."))?
+        .map_err(|_| crate::i18n::tr!("experimental-save-failed", "Failed to save experimental features. Reopen /experimental to check configured values before retrying."))?;
     let (tx, rx) = oneshot::channel();
     fetch(
         request_handle,
@@ -139,9 +164,18 @@ pub(crate) async fn write(
     );
     let features = rx
         .await
-        .map_err(|_| "Features were saved, but readback was interrupted")?
+        .map_err(|_| {
+            crate::i18n::tr!(
+                "experimental-readback-interrupted",
+                "Features were saved, but readback was interrupted"
+            )
+        })?
         .map_err(|error| {
-            format!("Features were saved, but configured values could not be refreshed: {error}")
+            crate::i18n::tr_format!(
+                "experimental-readback-failed",
+                "Features were saved, but configured values could not be refreshed: {error}",
+                error = &error
+            )
         })?;
     let overridden = response.status == WriteStatus::OkOverridden
         || updates.iter().any(|(name, enabled)| {
@@ -151,7 +185,7 @@ pub(crate) async fn write(
         });
     Ok(FeatureWriteResult {
         features,
-        warning: overridden.then(|| "Changes were saved, but the configured values differ from your selections. A higher-priority setting may override them.".to_string()),
+        warning: overridden.then(|| crate::i18n::tr!("experimental-overridden", "Changes were saved, but the configured values differ from your selections. A higher-priority setting may override them.").to_string()),
     })
 }
 

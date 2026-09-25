@@ -14,8 +14,8 @@ impl App {
         feature: Feature,
     ) {
         let label = match feature {
-            Feature::Collab => "Subagents",
-            Feature::MemoryTool => "Memories",
+            Feature::Collab => crate::i18n::tr!("experimental-subagents", "Subagents"),
+            Feature::MemoryTool => crate::i18n::tr!("experimental-memories", "Memories"),
             _ => return,
         };
         let mut edits = vec![crate::config_update::build_feature_enabled_edit(
@@ -87,8 +87,10 @@ impl App {
         response_tx: oneshot::Sender<Result<FeatureWriteResult, String>>,
     ) {
         let Ok(guard) = self.feature_write_lock.clone().try_lock_owned() else {
-            let error =
-                "An experimental feature save is still in progress. Retry after it finishes.";
+            let error = crate::i18n::tr!(
+                "experimental-save-pending",
+                "An experimental feature save is still in progress. Retry after it finishes."
+            );
             self.chat_widget.add_warning_message(error.to_string());
             let _ = response_tx.send(Err(error.to_string()));
             return;

@@ -1,5 +1,6 @@
 ---
 source: tui/src/app/owned_transcript_tests.rs
+assertion_line: 323
 expression: "normalize_snapshot_paths(snapshots.join(\"\\n\\n\"))"
 ---
 80x10, Recap at tail
@@ -91,7 +92,7 @@ History 20
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/proje…
+  gpt-test default
   ? for shortcuts
 
 32x12, Message after recap
@@ -105,7 +106,7 @@ History 20
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/proje…
+  gpt-test default
   ? for shortcuts
 
 32x12, Live message after recap
@@ -119,7 +120,7 @@ History 20
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/proje…
+  gpt-test default
   ? for shortcuts
 
 80x7, Recap at tail
@@ -154,7 +155,7 @@ History 20
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/proje…
+  gpt-test default
   ? for shortcuts
 
 32x6, Message after recap
@@ -162,7 +163,7 @@ History 20
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/proje…
+  gpt-test default
   ? for shortcuts
 
 32x6, Live message after recap
@@ -170,5 +171,5 @@ History 20
 
 › Ask Codex to do anything
 
-  gpt-test default · /tmp/proje…
+  gpt-test default
   ? for shortcuts

@@ -47,7 +47,7 @@ impl ChatComposer {
             render_footer_line(
                 area,
                 buf,
-                truncate_line_with_ellipsis_if_overflow(line, usize::from(width)),
+                fit_status_line_to_width(line, usize::from(width)),
             );
         }
         if let Some(right) = right {

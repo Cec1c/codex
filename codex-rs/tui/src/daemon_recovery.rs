@@ -89,9 +89,10 @@ pub(super) async fn check(
     };
     tui.terminal.clear()?;
     match (selection, issue.restart_features.as_ref()) {
-        (Some(0), _) => Ok(Some(format!(
-            "Running without the shared background server: {}.",
-            issue.reason
+        (Some(0), _) => Ok(Some(crate::i18n::tr_format!(
+            "daemon-without-reason",
+            "Running without the shared background server: {value}.",
+            value = issue.reason
         ))),
         (Some(1), Some(features)) if managed_daemon => {
             tui.with_restored(|| async {
@@ -120,22 +121,29 @@ fn recovery_view(
     let mut header = ColumnRenderable::new();
     header.push(Line::from(
         if issue.restart_features.is_some() {
-            "Background server has incompatible feature settings"
+            crate::i18n::tr!(
+                "daemon-incompatible-title",
+                "Background server has incompatible feature settings"
+            )
         } else {
-            "Cannot use the background server"
+            crate::i18n::tr!(
+                "daemon-unavailable-title",
+                "Cannot use the background server"
+            )
         }
         .bold(),
     ));
     header.push(Paragraph::new(issue.reason.clone()).wrap(Wrap { trim: false }));
     if let Some(features) = &issue.restart_features {
-        header.push(Line::from(
-            "Restart will use these shared feature settings:",
-        ));
+        header.push(Line::from(crate::i18n::tr!(
+            "daemon-restart-features",
+            "Restart will use these shared feature settings:"
+        )));
         for (name, enabled) in features {
             header.push(Line::from(format!("  {name} = {enabled}").dim()));
         }
         header.push(Paragraph::new(
-            "These settings persist and can disable functionality for other clients. Restart may interrupt active or queued work."
+            crate::i18n::tr!("daemon-restart-warning", "These settings persist and can disable functionality for other clients. Restart may interrupt active or queued work.")
         ).wrap(Wrap { trim: false }));
     }
     let (tx, _rx) = unbounded_channel::<AppEvent>();
@@ -145,26 +153,43 @@ fn recovery_view(
             initial_selected_idx: Some(2),
             items: vec![
                 SelectionItem {
-                    name: "Run without daemon this time".to_string(),
+                    name: crate::i18n::tr!("daemon-run-embedded", "Run without daemon this time")
+                        .to_string(),
                     dismiss_on_select: true,
                     ..Default::default()
                 },
                 SelectionItem {
-                    name: "Restart with these settings".to_string(),
+                    name: crate::i18n::tr!(
+                        "daemon-restart-settings",
+                        "Restart with these settings"
+                    )
+                    .to_string(),
                     dismiss_on_select: true,
                     require_explicit_confirmation: true,
                     is_disabled: !managed_daemon || issue.restart_features.is_none(),
                     disabled_reason: if !managed_daemon {
-                        Some("This server is not managed by Codex.".to_string())
+                        Some(
+                            crate::i18n::tr!(
+                                "daemon-unmanaged",
+                                "This server is not managed by Codex."
+                            )
+                            .to_string(),
+                        )
                     } else if issue.restart_features.is_none() {
-                        Some("Restart cannot resolve this compatibility check.".to_string())
+                        Some(
+                            crate::i18n::tr!(
+                                "daemon-restart-cannot-fix",
+                                "Restart cannot resolve this compatibility check."
+                            )
+                            .to_string(),
+                        )
                     } else {
                         None
                     },
                     ..Default::default()
                 },
                 SelectionItem {
-                    name: "Cancel".to_string(),
+                    name: crate::i18n::tr!("ui-cancel", "Cancel").to_string(),
                     dismiss_on_select: true,
                     ..Default::default()
                 },

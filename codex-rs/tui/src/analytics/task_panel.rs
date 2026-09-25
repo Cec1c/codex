@@ -18,7 +18,13 @@ use ratatui::text::Line;
 use std::cmp::Ordering;
 use std::ops::Range;
 
-pub(super) const METRICS: [&str; 3] = ["Weekly %", "5-hour %", "Balance credits"];
+pub(super) static METRICS: std::sync::LazyLock<[&str; 3]> = std::sync::LazyLock::new(|| {
+    [
+        crate::i18n::tr!("analytics-weekly-percent", "Weekly %"),
+        crate::i18n::tr!("analytics-5hour-percent", "5-hour %"),
+        crate::i18n::tr!("analytics-balance-credits", "Balance credits"),
+    ]
+});
 
 fn compare(a: Option<&TaskUsageAmounts>, b: Option<&TaskUsageAmounts>, metric: usize) -> Ordering {
     if metric == 2 {
@@ -158,7 +164,10 @@ impl AnalyticsView {
                 wrap(vec![
                     self.tasks
                         .message()
-                        .unwrap_or("No task usage reported.")
+                        .unwrap_or(crate::i18n::tr!(
+                            "analytics-no-task-usage",
+                            "No task usage reported."
+                        ))
                         .to_string()
                         .into(),
                 ]),
@@ -167,22 +176,29 @@ impl AnalyticsView {
         };
         let metric = self.task_metric();
         let mut lines = wrap(vec![
-            format!(
-                "Usage estimates · active in past 30 days · sorted by {}",
-                METRICS[metric]
+            crate::i18n::tr_format!(
+                "analytics-task-sorted",
+                "Usage estimates · active in past 30 days · sorted by {value}",
+                value = METRICS[metric]
             )
             .set_style(secondary_style())
             .into(),
             if metric == 2 {
-                "Credits debited from balance · includes adjustments"
+                crate::i18n::tr!(
+                    "analytics-debited-note",
+                    "Credits debited from balance · includes adjustments"
+                )
             } else {
-                "Recorded usage / current full limit · may exceed 100%"
+                crate::i18n::tr!(
+                    "analytics-full-limit-note",
+                    "Recorded usage / current full limit · may exceed 100%"
+                )
             }
             .set_style(secondary_style())
             .into(),
         ]);
         if chats.rows.is_empty() {
-            lines.push("No recent local chats.".into());
+            lines.push(crate::i18n::tr!("analytics-no-chats", "No recent local chats.").into());
             return (lines, 0..1);
         }
         let missing = chats
@@ -201,9 +217,14 @@ impl AnalyticsView {
             .count();
         if missing + partial > 0 {
             lines.extend(wrap(vec![
-                format!("Partial ranking · {partial} partial · {missing} unavailable")
-                    .set_style(secondary_style())
-                    .into(),
+                crate::i18n::tr_format!(
+                    "analytics-ranking-partial",
+                    "Partial ranking · {partial} partial · {missing} unavailable",
+                    partial = &partial,
+                    missing = &missing
+                )
+                .set_style(secondary_style())
+                .into(),
             ]));
         }
         let metrics = self.task_metrics();
@@ -242,7 +263,9 @@ impl AnalyticsView {
         };
         lines.push(Line::default());
         lines.push(columns(
-            "  Chat".bold().into(),
+            crate::i18n::tr!("analytics-chat-column", "  Chat")
+                .bold()
+                .into(),
             metric_text(/*chat*/ None).bold().into(),
             width,
         ));
@@ -259,7 +282,7 @@ impl AnalyticsView {
                     .as_ref()
                     .is_some_and(|task| task.data_status == TaskUsageStatus::Partial)
                 {
-                    " · partial"
+                    crate::i18n::tr!("analytics-partial-suffix", " · partial")
                 } else {
                     ""
                 };
@@ -311,13 +334,19 @@ impl AnalyticsView {
                             });
                             row.push(Line::default());
                             row.push(columns(
-                                "  Model / effort / speed".bold().into(),
+                                crate::i18n::tr!(
+                                    "analytics-model-effort-speed",
+                                    "  Model / effort / speed"
+                                )
+                                .bold()
+                                .into(),
                                 METRICS[metric].bold().into(),
                                 width,
                             ));
                             for group in groups {
-                                let model = self
-                                    .model_name(group.model.as_deref().unwrap_or("Not reported"));
+                                let model = self.model_name(group.model.as_deref().unwrap_or(
+                                    crate::i18n::tr!("analytics-not-reported", "Not reported"),
+                                ));
                                 let value = amount(Some(&group.amounts), metric);
                                 row.push(columns(
                                     truncate(
@@ -330,12 +359,22 @@ impl AnalyticsView {
                                 row.push(
                                     format!(
                                         "    {} · {} · {}",
-                                        group.reasoning_effort.as_deref().unwrap_or("Not reported"),
-                                        group.speed.as_deref().unwrap_or("Not reported"),
-                                        group
-                                            .product_experience
-                                            .as_deref()
-                                            .unwrap_or("Not reported")
+                                        group.reasoning_effort.as_deref().unwrap_or(
+                                            crate::i18n::tr!(
+                                                "analytics-not-reported",
+                                                "Not reported"
+                                            )
+                                        ),
+                                        group.speed.as_deref().unwrap_or(crate::i18n::tr!(
+                                            "analytics-not-reported",
+                                            "Not reported"
+                                        )),
+                                        group.product_experience.as_deref().unwrap_or(
+                                            crate::i18n::tr!(
+                                                "analytics-not-reported",
+                                                "Not reported"
+                                            )
+                                        )
                                     )
                                     .set_style(secondary_style())
                                     .into(),
@@ -344,9 +383,12 @@ impl AnalyticsView {
                         }
                     } else {
                         row.push(
-                            "  Task usage unavailable."
-                                .set_style(secondary_style())
-                                .into(),
+                            crate::i18n::tr!(
+                                "analytics-task-unavailable",
+                                "  Task usage unavailable."
+                            )
+                            .set_style(secondary_style())
+                            .into(),
                         );
                     }
                     row.push(Line::default());
@@ -364,22 +406,29 @@ impl AnalyticsView {
             })
             .collect::<Vec<_>>();
         let mut coverage = vec![
-            "Local chats · includes discovered descendants · excludes archived roots"
-                .set_style(secondary_style())
-                .into(),
+            crate::i18n::tr!(
+                "analytics-task-scope",
+                "Local chats · includes discovered descendants · excludes archived roots"
+            )
+            .set_style(secondary_style())
+            .into(),
         ];
         if chats.truncated {
             coverage.push(
-                "Partial ranking · 100 most recently active chats"
-                    .set_style(secondary_style())
-                    .into(),
+                crate::i18n::tr!(
+                    "analytics-partial-ranking",
+                    "Partial ranking · 100 most recently active chats"
+                )
+                .set_style(secondary_style())
+                .into(),
             );
         }
         if let Some(time) = chats.updated_at {
             coverage.push(
-                format!(
-                    "Updated {} UTC · recent activity may be delayed",
-                    time.format(self.clock_format.date_time_format())
+                crate::i18n::tr_format!(
+                    "analytics-updated-delay",
+                    "Updated {value} UTC · recent activity may be delayed",
+                    value = time.format(self.clock_format.date_time_format())
                 )
                 .set_style(secondary_style())
                 .into(),
@@ -389,7 +438,15 @@ impl AnalyticsView {
             let count = rows.len();
             lines.extend(rows.into_iter().take(/*n*/ 5).flatten());
             lines.push(Line::default());
-            lines.push(format!("Showing top {} of {count} chats", count.min(/*other*/ 5)).into());
+            lines.push(
+                crate::i18n::tr_format!(
+                    "analytics-top-chats",
+                    "Showing top {value} of {count} chats",
+                    value = count.min(/*other*/ 5),
+                    count = &count
+                )
+                .into(),
+            );
             lines.extend(wrap(coverage));
             (lines, 0..1)
         } else {

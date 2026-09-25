@@ -1,6 +1,7 @@
 //! Local daemon launch policy. Explicit embedded launches never discover or start a daemon;
 //! optional attachment may fall back to embedded mode, while automatic launches
-//! require a compatible shared server and a successful connection.
+//! require a compatible shared server and a successful connection, except when
+//! the Windows host prevents a background process from detaching.
 
 use super::*;
 use std::collections::BTreeMap;
@@ -13,6 +14,13 @@ const SERVER_FEATURES: [Feature; 4] = [
 ];
 
 pub(super) const FAILURE_HINT: &str = "To work without the background server, rerun the same command with --no-daemon (including resume or fork and its arguments).";
+
+pub(super) fn host_requires_embedded(error: &anyhow::Error) -> bool {
+    cfg!(windows) && error.chain().any(|cause| {
+        cause.to_string()
+            == "host Job Object prevents daemon detachment; start from a host that allows breakaway"
+    })
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("Cannot use the shared background server: {reason}.\n{FAILURE_HINT}")]

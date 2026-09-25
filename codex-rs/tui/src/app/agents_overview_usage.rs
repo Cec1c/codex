@@ -169,20 +169,35 @@ pub(super) fn usage_lines(usage: &AgentsOverviewUsage) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     let mut tokens = Vec::new();
     if let Some(input) = input {
-        tokens.push(format!("{} in", format_tokens_compact(input)));
+        tokens.push(crate::i18n::tr_format!(
+            "agents-input-tokens",
+            "{value} in",
+            value = format_tokens_compact(input)
+        ));
     }
     if let Some(output) = output {
-        tokens.push(format!("{} out", format_tokens_compact(output)));
+        tokens.push(crate::i18n::tr_format!(
+            "agents-output-tokens",
+            "{value} out",
+            value = format_tokens_compact(output)
+        ));
     }
     if !tokens.is_empty() {
-        lines.push(vec!["Tokens: ".dim(), tokens.join(" · ").into()].into());
+        lines.push(
+            vec![
+                crate::i18n::tr!("agents-tokens-label", "Tokens: ").dim(),
+                tokens.join(" · ").into(),
+            ]
+            .into(),
+        );
     }
     if let Some(estimate) = &usage.estimate {
         let mut values = Vec::new();
         if estimate.estimated_usage_credits_micros >= 0 {
-            values.push(format!(
-                "{} credits",
-                format_credit_micros(estimate.estimated_usage_credits_micros)
+            values.push(crate::i18n::tr_format!(
+                "agents-credit-count",
+                "{value} credits",
+                value = format_credit_micros(estimate.estimated_usage_credits_micros)
             ));
         }
         if let Some(cost) = estimate
@@ -192,7 +207,13 @@ pub(super) fn usage_lines(usage: &AgentsOverviewUsage) -> Vec<Line<'static>> {
             values.push(cost);
         }
         if !values.is_empty() {
-            lines.push(vec!["Est. usage: ".dim(), values.join(" · ").into()].into());
+            lines.push(
+                vec![
+                    crate::i18n::tr!("agents-usage-label", "Est. usage: ").dim(),
+                    values.join(" · ").into(),
+                ]
+                .into(),
+            );
         }
     }
     lines

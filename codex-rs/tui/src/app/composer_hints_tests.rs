@@ -88,6 +88,7 @@ async fn usage_notice_preserves_composer_geometry_and_restores_tip_on_recovery()
         let mut tui = crate::tui::test_support::make_test_tui()?;
         tui.set_owned_screen(/*owned*/ true)?;
         let size = Size::new(width, height);
+        crate::custom_terminal::test_support::set_screen_size(&mut tui.terminal, size);
         tui.terminal.resize(size)?;
         let before = app.render_owned_transcript(&mut tui, size)?;
         let cursor = tui.terminal.last_known_cursor_pos;
@@ -216,6 +217,7 @@ async fn hints_respect_settings_drafts_and_custom_shortcuts() -> Result<()> {
     let mut snapshots = Vec::new();
     for width in [80, 32] {
         let size = Size::new(width, /*height*/ 8);
+        crate::custom_terminal::test_support::set_screen_size(&mut tui.terminal, size);
         tui.screen_size_for_event(&TuiEvent::Resize(size))?;
         app.render_owned_transcript(&mut tui, size)?;
         let buffer = crate::custom_terminal::test_support::last_rendered_buffer(&tui.terminal);
@@ -418,6 +420,7 @@ async fn hints_render_clickable_links_and_release_them_when_disabled() -> Result
     let mut tui = crate::tui::test_support::make_test_tui()?;
     tui.set_owned_screen(/*owned*/ true)?;
     let size = Size::new(/*width*/ 85, /*height*/ 8);
+    crate::custom_terminal::test_support::set_screen_size(&mut tui.terminal, size);
     tui.screen_size_for_event(&TuiEvent::Resize(size))?;
     let bottom = app.render_owned_transcript(&mut tui, size)?;
     let buffer = crate::custom_terminal::test_support::last_rendered_buffer(&tui.terminal);
@@ -448,6 +451,7 @@ async fn hints_render_clickable_links_and_release_them_when_disabled() -> Result
         }
     }
     app.local_settings.tui.show_tooltips = false;
+    crate::custom_terminal::test_support::set_screen_size(&mut tui.terminal, size);
     tui.screen_size_for_event(&TuiEvent::Resize(size))?;
     app.render_owned_transcript(&mut tui, size)?;
     for column in 0..size.width {

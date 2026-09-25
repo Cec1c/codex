@@ -23,54 +23,56 @@ pub(super) fn filtered_history(
 ) -> Result<AccountAnalyticsHistory, String> {
     let mut days: BTreeMap<NaiveDate, BTreeMap<String, f64>> = BTreeMap::new();
     for record in response.data {
-        let date = record
-            .date
-            .parse::<NaiveDate>()
-            .map_err(|_| "Invalid token report date.")?;
+        let date = record.date.parse::<NaiveDate>().map_err(|_| {
+            crate::i18n::tr!("analytics-invalid-token-date", "Invalid token report date.")
+        })?;
         if date < start || date > end {
             continue;
         }
-        let groups = if let Some(groups) = record.groups {
-            groups
-                .into_iter()
-                .map(|group| {
-                    (
-                        if group.is_other {
-                            "Other".into()
-                        } else {
-                            group
-                                .dimensions
-                                .get("model")
-                                .cloned()
-                                .unwrap_or_else(|| "Unknown".into())
-                        },
-                        [
-                            group.uncached_text_input_tokens,
-                            group.cached_text_input_tokens,
-                            group.text_output_tokens,
-                        ],
-                        None,
-                    )
-                })
-                .collect::<Vec<_>>()
-        } else if let Some(models) = record.models {
-            models
-                .into_iter()
-                .map(|model| {
-                    (
-                        model.model,
-                        [
-                            model.uncached_text_input_tokens,
-                            model.cached_text_input_tokens,
-                            model.text_output_tokens,
-                        ],
-                        model.text_total_tokens,
-                    )
-                })
-                .collect()
-        } else {
-            return Err("Token breakdown is not available in this report.".into());
-        };
+        let groups =
+            if let Some(groups) = record.groups {
+                groups
+                    .into_iter()
+                    .map(|group| {
+                        (
+                            if group.is_other {
+                                crate::i18n::tr!("ui-other", "Other").into()
+                            } else {
+                                group.dimensions.get("model").cloned().unwrap_or_else(|| {
+                                    crate::i18n::tr!("ui-unknown", "Unknown").into()
+                                })
+                            },
+                            [
+                                group.uncached_text_input_tokens,
+                                group.cached_text_input_tokens,
+                                group.text_output_tokens,
+                            ],
+                            None,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            } else if let Some(models) = record.models {
+                models
+                    .into_iter()
+                    .map(|model| {
+                        (
+                            model.model,
+                            [
+                                model.uncached_text_input_tokens,
+                                model.cached_text_input_tokens,
+                                model.text_output_tokens,
+                            ],
+                            model.text_total_tokens,
+                        )
+                    })
+                    .collect()
+            } else {
+                return Err(crate::i18n::tr!(
+                    "analytics-token-breakdown-unavailable",
+                    "Token breakdown is not available in this report."
+                )
+                .into());
+            };
         let values = days.entry(date).or_default();
         for (model, counts, total) in groups {
             if model_filter.is_some_and(|selected| selected != model) {
@@ -81,21 +83,37 @@ pub(super) fn filtered_history(
                 && let Some(total) = total.filter(|total| *total != 0.0 || missing_components)
             {
                 if !total.is_finite() || total < 0.0 || total.fract() != 0.0 {
-                    return Err("Invalid token count.".into());
+                    return Err(crate::i18n::tr!(
+                        "analytics-invalid-token-count",
+                        "Invalid token count."
+                    )
+                    .into());
                 }
                 *values.entry(model).or_default() += total;
                 continue;
             }
             if missing_components {
-                return Err("Token counts were not reported.".into());
+                return Err(crate::i18n::tr!(
+                    "analytics-tokens-not-reported",
+                    "Token counts were not reported."
+                )
+                .into());
             }
-            for (label, count) in ["Uncached input", "Cached input", "Output"]
-                .into_iter()
-                .zip(counts)
+            for (label, count) in [
+                crate::i18n::tr!("analytics-uncached-input", "Uncached input"),
+                crate::i18n::tr!("analytics-cached-input", "Cached input"),
+                crate::i18n::tr!("analytics-output", "Output"),
+            ]
+            .into_iter()
+            .zip(counts)
             {
                 let count = count.unwrap_or(/*default*/ 0.0);
                 if !count.is_finite() || count < 0.0 || count.fract() != 0.0 {
-                    return Err("Invalid token count.".into());
+                    return Err(crate::i18n::tr!(
+                        "analytics-invalid-token-count",
+                        "Invalid token count."
+                    )
+                    .into());
                 }
                 let key = if grouping == AccountAnalyticsGrouping::Model {
                     &model

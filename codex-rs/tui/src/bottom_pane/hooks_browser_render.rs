@@ -16,15 +16,24 @@ impl HooksBrowserView {
         let mut rows = header.split_off(header.len().saturating_sub(events.len()));
         if width < 72 {
             header.pop();
-            header.push("Event               Active/Installed".dim().into());
+            header.push(
+                crate::i18n::tr!(
+                    "hooks-table-heading",
+                    "Event               Active/Installed"
+                )
+                .dim()
+                .into(),
+            );
             rows = events
                 .iter()
                 .enumerate()
                 .map(|(index, row)| {
                     let name = event_label(row.event_name);
                     let review = if row.needs_review > 0 { " !" } else { "" };
+                    let padding =
+                        " ".repeat(18usize.saturating_sub(crate::width::display_width(&name)));
                     let line = Line::from(format!(
-                        "{name:<18}  {}/{}{review}",
+                        "{name}{padding}  {}/{}{review}",
                         row.active, row.installed
                     ));
                     if self.state.selected_idx == Some(index) {
@@ -140,9 +149,12 @@ impl Renderable for HooksBrowserView {
             HooksBrowserPage::Events => render_line_rows(body, buf, rows, self.state),
             HooksBrowserPage::Handlers(event) => {
                 if rows.is_empty() {
-                    Paragraph::new("  No hooks installed for this event.")
-                        .dim()
-                        .render(body, buf);
+                    Paragraph::new(crate::i18n::tr!(
+                        "hooks-event-empty",
+                        "  No hooks installed for this event."
+                    ))
+                    .dim()
+                    .render(body, buf);
                 } else {
                     let desired = rows.len().min(MAX_POPUP_ROWS) as u16 + 2;
                     let list_height = desired

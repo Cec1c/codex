@@ -28,16 +28,19 @@ impl Renderable for WarningsView {
         .areas(area);
         let entry = self.entries.get(self.current);
         let title = match entry {
-            Some(entry) => format!(
-                "Warnings · {} of {} · {}",
-                self.current + 1,
-                self.entries.len(),
-                entry.source
+            Some(entry) => crate::i18n::tr_format!(
+                "warnings-page",
+                "Warnings · {value} of {value2} · {value3}",
+                value = self.current + 1,
+                value2 = self.entries.len(),
+                value3 = entry.source
             ),
-            None => "Warnings".to_string(),
+            None => crate::i18n::tr!("warnings-title", "Warnings").to_string(),
         };
         Line::from(title.bold()).render(header, buf);
-        let details = entry.map_or("No warnings", |entry| entry.details.as_str());
+        let details = entry.map_or(crate::i18n::tr!("warnings-empty", "No warnings"), |entry| {
+            entry.details.as_str()
+        });
         let lines: Vec<_> = details
             .lines()
             .flat_map(|line| textwrap::wrap(line, usize::from(body.width.max(/*other*/ 1))))
@@ -70,20 +73,23 @@ impl Renderable for WarningsView {
                 self.keymap
                     .primary_hint(KeymapContext::List, "cancel")
                     .map(crate::key_hint::ShortcutHint::display_label),
-                "back",
+                crate::i18n::tr!("keymap-menu-hint-back", "back"),
             ),
             (
                 self.keymap
                     .primary_hint(KeymapContext::Global, "copy")
                     .map(crate::key_hint::ShortcutHint::display_label),
-                "copy",
+                crate::i18n::tr!("warnings-hint-copy", "copy"),
             ),
-            ((!navigation.is_empty()).then_some(navigation), "warning"),
+            (
+                (!navigation.is_empty()).then_some(navigation),
+                crate::i18n::tr!("warnings-hint-warning", "warning"),
+            ),
             (
                 self.keymap
                     .primary_hint(KeymapContext::List, "move_down")
                     .map(crate::key_hint::ShortcutHint::display_label),
-                "scroll",
+                crate::i18n::tr!("warnings-hint-scroll", "scroll"),
             ),
         ] {
             if let Some(hint) = hint {

@@ -25,8 +25,14 @@ impl ChatWidget {
             })
             .collect();
         self.bottom_pane.show_selection_view(SelectionViewParams {
-            title: Some("Select voice".to_string()),
-            subtitle: Some("Applies to your next voice conversation.".to_string()),
+            title: Some(crate::i18n::tr!("voice-select-title", "Select voice").to_string()),
+            subtitle: Some(
+                crate::i18n::tr!(
+                    "voice-next-conversation",
+                    "Applies to your next voice conversation."
+                )
+                .to_string(),
+            ),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             ..SelectionViewParams::picker()
@@ -40,9 +46,10 @@ impl ChatWidget {
     pub(crate) fn on_realtime_voice_saved(&mut self, voice: RealtimeVoice) {
         self.set_realtime_voice(Some(voice));
         self.add_info_message(
-            format!(
-                "Voice set to {}. Applies to your next voice conversation.",
-                voice.wire_name()
+            crate::i18n::tr_format!(
+                "voice-saved",
+                "Voice set to {value}. Applies to your next voice conversation.",
+                value = voice.wire_name()
             ),
             /*hint*/ None,
         );

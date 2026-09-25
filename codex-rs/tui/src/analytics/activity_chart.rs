@@ -46,7 +46,7 @@ impl TokenActivityView {
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Daily => "Daily",
-            Self::Weekly => "Weekly",
+            Self::Weekly => crate::i18n::tr!("analytics-weekly", "Weekly"),
             Self::Cumulative => "Cumulative",
         }
     }

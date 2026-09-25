@@ -23,7 +23,10 @@ impl AnalyticsView {
             lines.push(
                 self.profile
                     .message()
-                    .unwrap_or("Profile statistics unavailable.")
+                    .unwrap_or(crate::i18n::tr!(
+                        "analytics-profile-unavailable",
+                        "Profile statistics unavailable."
+                    ))
                     .to_owned()
                     .into(),
             );
@@ -73,7 +76,7 @@ impl AnalyticsView {
                 | PlanType::EnterpriseCbpUsageBased
                 | PlanType::Enterprise => "Enterprise",
                 PlanType::Edu | PlanType::EduPlus | PlanType::EduPro => "Education",
-                PlanType::Unknown => "Account",
+                PlanType::Unknown => crate::i18n::tr!("analytics-account", "Account"),
             }
         });
         if let Some(plan) = plan {
@@ -86,32 +89,32 @@ impl AnalyticsView {
         let tokens = &profile.stats.tokens;
         let fields = [
             (
-                "Lifetime tokens",
+                crate::i18n::tr!("analytics-lifetime-tokens", "Lifetime tokens"),
                 tokens
                     .lifetime_tokens
                     .map(|value| super::data::compact_amount(value as f64)),
             ),
             (
-                "Peak tokens",
+                crate::i18n::tr!("analytics-peak-tokens", "Peak tokens"),
                 tokens
                     .peak_daily_tokens
                     .map(|value| super::data::compact_amount(value as f64)),
             ),
             (
-                "Longest chat",
+                crate::i18n::tr!("analytics-longest-chat", "Longest chat"),
                 tokens.longest_running_turn_sec.map(duration),
             ),
             (
-                "Current streak",
-                tokens
-                    .current_streak_days
-                    .map(|days| format!("{days} days")),
+                crate::i18n::tr!("analytics-current-streak", "Current streak"),
+                tokens.current_streak_days.map(|days| {
+                    crate::i18n::tr_format!("analytics-days", "{days} days", days = &days)
+                }),
             ),
             (
-                "Longest streak",
-                tokens
-                    .longest_streak_days
-                    .map(|days| format!("{days} days")),
+                crate::i18n::tr!("analytics-longest-streak", "Longest streak"),
+                tokens.longest_streak_days.map(|days| {
+                    crate::i18n::tr_format!("analytics-days", "{days} days", days = &days)
+                }),
             ),
         ];
         if !self.zoomed {
@@ -156,8 +159,16 @@ impl AnalyticsView {
             lines.extend([values, labels, Line::default()]);
         }
         let selected = self.sections[Section::Summary].group;
-        lines.push("Token activity".bold().into());
-        lines.push("Last 12 months".set_style(secondary_style()).into());
+        lines.push(
+            crate::i18n::tr!("analytics-token-activity", "Token activity")
+                .bold()
+                .into(),
+        );
+        lines.push(
+            crate::i18n::tr!("analytics-last-year", "Last 12 months")
+                .set_style(secondary_style())
+                .into(),
+        );
         lines.push(Line::default());
         if let Some(buckets) = &tokens.daily_usage_buckets {
             lines.extend(activity_chart::chart_lines(
@@ -168,9 +179,12 @@ impl AnalyticsView {
             ));
         } else {
             lines.push(
-                "Token activity history unavailable"
-                    .set_style(secondary_style())
-                    .into(),
+                crate::i18n::tr!(
+                    "analytics-token-history-unavailable",
+                    "Token activity history unavailable"
+                )
+                .set_style(secondary_style())
+                .into(),
             );
         }
         lines.push(Line::default());
@@ -185,13 +199,25 @@ impl AnalyticsView {
             .unwrap_or_else(|| "—".into());
         let metrics = [
             (
-                "Fast Mode",
+                crate::i18n::tr!("analytics-fast-mode", "Fast Mode"),
                 percent(stats.fast_mode_usage_percentage.as_ref()),
             ),
-            ("Most used reasoning", reasoning),
-            ("Skills explored", count_value(stats.unique_skills_used)),
-            ("Total skills used", count_value(stats.total_skills_used)),
-            ("Total chats", count_value(stats.total_threads)),
+            (
+                crate::i18n::tr!("analytics-most-reasoning", "Most used reasoning"),
+                reasoning,
+            ),
+            (
+                crate::i18n::tr!("analytics-skills-explored", "Skills explored"),
+                count_value(stats.unique_skills_used),
+            ),
+            (
+                crate::i18n::tr!("analytics-total-skills", "Total skills used"),
+                count_value(stats.total_skills_used),
+            ),
+            (
+                crate::i18n::tr!("analytics-total-chats", "Total chats"),
+                count_value(stats.total_threads),
+            ),
         ];
         let two_columns = inner_width >= 76;
         let column_width = if two_columns {
@@ -199,7 +225,12 @@ impl AnalyticsView {
         } else {
             inner_width
         };
-        let mut insights = vec!["Activity insights".bold().into(), Line::default()];
+        let mut insights = vec![
+            crate::i18n::tr!("analytics-insights", "Activity insights")
+                .bold()
+                .into(),
+            Line::default(),
+        ];
         for (label, value) in metrics {
             insights.extend(word_wrap_lines(
                 [columns(
@@ -211,7 +242,9 @@ impl AnalyticsView {
             ));
         }
         let mut plugins = vec![
-            "Most used plugins and skills".bold().into(),
+            crate::i18n::tr!("analytics-most-tools", "Most used plugins and skills")
+                .bold()
+                .into(),
             Line::default(),
         ];
         if let Some(invocations) = &stats.top_invocations {
@@ -253,16 +286,19 @@ impl AnalyticsView {
             }
             if displayed == 0 {
                 plugins.push(
-                    "No reported plugins or skills."
+                    crate::i18n::tr!("analytics-no-tools", "No reported plugins or skills.")
                         .set_style(secondary_style())
                         .into(),
                 );
             }
         } else {
             plugins.push(
-                "Plugin and skill usage unavailable."
-                    .set_style(secondary_style())
-                    .into(),
+                crate::i18n::tr!(
+                    "analytics-tools-unavailable",
+                    "Plugin and skill usage unavailable."
+                )
+                .set_style(secondary_style())
+                .into(),
             );
         }
         if two_columns {
@@ -280,9 +316,13 @@ impl AnalyticsView {
                 .and_then(|date| chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
             {
                 lines.push(
-                    format!("Statistics as of {}", date.format("%b %-d, %Y"))
-                        .set_style(secondary_style())
-                        .into(),
+                    crate::i18n::tr_format!(
+                        "analytics-statistics-as-of",
+                        "Statistics as of {value}",
+                        value = date.format("%b %-d, %Y")
+                    )
+                    .set_style(secondary_style())
+                    .into(),
                 );
             }
             if metadata
@@ -291,9 +331,12 @@ impl AnalyticsView {
                 .is_some_and(|error| !error.trim().is_empty())
             {
                 lines.push(
-                    "Some profile statistics are unavailable."
-                        .set_style(secondary_style())
-                        .into(),
+                    crate::i18n::tr!(
+                        "analytics-profile-partial",
+                        "Some profile statistics are unavailable."
+                    )
+                    .set_style(secondary_style())
+                    .into(),
                 );
             }
         }

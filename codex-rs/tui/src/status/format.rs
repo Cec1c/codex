@@ -36,15 +36,12 @@ impl FieldFormatter {
         }
     }
 
-    pub(crate) fn line(
-        &self,
-        label: &'static str,
-        value_spans: Vec<Span<'static>>,
-    ) -> Line<'static> {
+    pub(crate) fn line(&self, label: &str, value_spans: Vec<Span<'static>>) -> Line<'static> {
         Line::from(self.full_spans(label, value_spans))
     }
 
     pub(crate) fn continuation(&self, mut spans: Vec<Span<'static>>) -> Line<'static> {
+        self.style_value_spans(&mut spans);
         let mut all_spans = Vec::with_capacity(spans.len() + 1);
         all_spans.push(Span::from(self.value_indent.clone()).dim());
         all_spans.append(&mut spans);
@@ -60,6 +57,7 @@ impl FieldFormatter {
         label: &str,
         mut value_spans: Vec<Span<'static>>,
     ) -> Vec<Span<'static>> {
+        self.style_value_spans(&mut value_spans);
         let mut spans = Vec::with_capacity(value_spans.len() + 1);
         spans.push(self.label_span(label));
         spans.append(&mut value_spans);
@@ -79,7 +77,26 @@ impl FieldFormatter {
             buf.push(' ');
         }
 
-        Span::from(buf).dim()
+        if let Some(style) =
+            crate::ccu_theme::active().and_then(|theme| theme.status_card_style("label"))
+        {
+            Span::styled(buf, style)
+        } else {
+            Span::from(buf).dim()
+        }
+    }
+
+    fn style_value_spans(&self, spans: &mut [Span<'static>]) {
+        let Some(style) =
+            crate::ccu_theme::active().and_then(|theme| theme.status_card_style("value"))
+        else {
+            return;
+        };
+        for span in spans {
+            if span.style.fg.is_none() {
+                span.style = span.style.patch(style);
+            }
+        }
     }
 }
 

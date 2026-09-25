@@ -55,65 +55,109 @@ impl AgentsOverviewView {
 
     pub(super) fn center_help_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut navigate = Group {
-            title: "Navigate",
+            title: crate::i18n::tr!("agents-navigate", "Navigate"),
             entries: Vec::new(),
         };
         for (action, label) in [
-            (ListAction::MoveUp, "Up"),
-            (ListAction::MoveDown, "Down"),
-            (ListAction::Accept, "Open"),
-            (ListAction::PageUp, "Page up"),
-            (ListAction::PageDown, "Page down"),
+            (ListAction::MoveUp, crate::i18n::tr!("ui-up", "Up")),
+            (ListAction::MoveDown, crate::i18n::tr!("ui-down", "Down")),
+            (ListAction::Accept, crate::i18n::tr!("ui-open", "Open")),
+            (
+                ListAction::PageUp,
+                crate::i18n::tr!("ui-page-up", "Page up"),
+            ),
+            (
+                ListAction::PageDown,
+                crate::i18n::tr!("ui-page-down", "Page down"),
+            ),
         ] {
             navigate.push(self.center_list_hint(action), label);
         }
-        navigate
-            .entries
-            .push(Shortcut::new(key_hint::ctrl(KeyCode::Char('c')), "Quit"));
+        navigate.entries.push(Shortcut::new(
+            key_hint::ctrl(KeyCode::Char('c')),
+            crate::i18n::tr!("ui-quit", "Quit"),
+        ));
         let mut tasks = Group {
-            title: "Tasks",
+            title: crate::i18n::tr!("agents-tasks", "Tasks"),
             entries: Vec::new(),
         };
         for (action, bindings, label) in [
-            ("new_task", &self.agents_keymap.new_task, "New"),
+            (
+                "new_task",
+                &self.agents_keymap.new_task,
+                crate::i18n::tr!("ui-new", "New"),
+            ),
             (
                 "new_worktree",
                 &self.agents_keymap.new_worktree,
-                "New worktree",
+                crate::i18n::tr!("worktree-new", "New worktree"),
             ),
-            ("resume", &self.agents_keymap.resume, "Resume"),
-            ("rename", &self.agents_keymap.rename, "Rename"),
-            ("stop", &self.agents_keymap.stop, "Stop"),
-            ("archive", &self.agents_keymap.archive, "Archive"),
-            ("hide", &self.agents_keymap.hide, "Hide"),
-            ("delete", &self.agents_keymap.delete, "Delete"),
+            (
+                "resume",
+                &self.agents_keymap.resume,
+                crate::i18n::tr!("ui-resume", "Resume"),
+            ),
+            (
+                "rename",
+                &self.agents_keymap.rename,
+                crate::i18n::tr!("ui-rename", "Rename"),
+            ),
+            (
+                "stop",
+                &self.agents_keymap.stop,
+                crate::i18n::tr!("ui-stop", "Stop"),
+            ),
+            (
+                "archive",
+                &self.agents_keymap.archive,
+                crate::i18n::tr!("ui-archive", "Archive"),
+            ),
+            (
+                "hide",
+                &self.agents_keymap.hide,
+                crate::i18n::tr!("ui-hide", "Hide"),
+            ),
+            (
+                "delete",
+                &self.agents_keymap.delete,
+                crate::i18n::tr!("ui-delete", "Delete"),
+            ),
         ] {
             if action != "new_worktree" || self.worktrees_enabled {
                 tasks.push(self.agents_keymap.primary_hint(action, bindings), label);
             }
         }
         let mut view = Group {
-            title: "View",
+            title: crate::i18n::tr!("ui-view", "View"),
             entries: Vec::new(),
         };
         let filter = self.center_filter_hint();
         if !filter.is_empty() {
             view.entries.push(Shortcut {
                 key: filter,
-                action: "Filter",
+                action: crate::i18n::tr!("ui-filter", "Filter"),
             });
         }
         for (action, bindings, label) in [
-            ("search", &self.agents_keymap.search, "Search"),
+            (
+                "search",
+                &self.agents_keymap.search,
+                crate::i18n::tr!("ui-search", "Search"),
+            ),
             (
                 "toggle_grouping",
                 &self.agents_keymap.toggle_grouping,
-                "Group",
+                crate::i18n::tr!("ui-group", "Group"),
             ),
         ] {
             view.push(self.agents_keymap.primary_hint(action, bindings), label);
         }
-        let mut lines = vec!["Task shortcuts".bold().into(), Line::default()];
+        let mut lines = vec![
+            crate::i18n::tr!("agents-shortcuts", "Task shortcuts")
+                .bold()
+                .into(),
+            Line::default(),
+        ];
         lines.extend(crate::shortcut_help::group_lines(
             [navigate, tasks, view],
             width,

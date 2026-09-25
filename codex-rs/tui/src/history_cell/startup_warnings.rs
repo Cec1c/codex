@@ -55,7 +55,7 @@ impl HistoryCell for StartupWarningsCell {
             .iter()
             .map(|message| WarningEntry {
                 id: WarningId::Message(message.clone()),
-                source: "Startup".into(),
+                source: crate::i18n::tr!("warnings-source-startup", "Startup").into(),
                 details: message.clone(),
             })
             .chain(self.mcp_servers.iter().map(|server| WarningEntry {

@@ -86,7 +86,7 @@ impl HistoryCell for WarningHistoryCell {
     fn warning_entries(&self) -> Vec<WarningEntry> {
         vec![WarningEntry {
             id: WarningId::Message(self.key.clone()),
-            source: "Warning".into(),
+            source: crate::i18n::tr!("warnings-source-warning", "Warning").into(),
             details: self.diagnostic.clone(),
         }]
     }

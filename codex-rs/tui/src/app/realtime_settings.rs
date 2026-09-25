@@ -70,9 +70,11 @@ impl App {
         let voices = self.realtime_voices(app_server).await;
         match self.effective_realtime_voice(app_server, &voices).await {
             Ok(voice) => self.chat_widget.open_realtime_settings(voice, voices),
-            Err(error) => self
-                .chat_widget
-                .add_error_message(format!("Failed to read voice settings: {error}")),
+            Err(error) => self.chat_widget.add_error_message(crate::i18n::tr_format!(
+                "voice-read-failed",
+                "Failed to read voice settings: {error}",
+                error = &error
+            )),
         }
     }
 
@@ -106,18 +108,17 @@ impl App {
                         if effective_voice == Some(voice) {
                             self.chat_widget.on_realtime_voice_saved(voice);
                         } else {
-                            self.chat_widget.add_error_message(format!(
-                                "Voice preference was saved but not applied: {}",
-                                super::config_persistence::overridden_write_message(&response),
-                            ));
+                            self.chat_widget.add_error_message(crate::i18n::tr_format!("voice-not-applied", "Voice preference was saved but not applied: {value}", value = super::config_persistence::overridden_write_message(&response)));
                         }
                     }
-                    Err(error) => self.chat_widget.add_error_message(format!("Voice preference was saved, but effective settings could not be read: {error}")),
+                    Err(error) => self.chat_widget.add_error_message(crate::i18n::tr_format!("voice-effective-read-failed", "Voice preference was saved, but effective settings could not be read: {error}", error = &error)),
                 }
             }
-            Err(error) => self
-                .chat_widget
-                .add_error_message(format!("Failed to save voice: {error}")),
+            Err(error) => self.chat_widget.add_error_message(crate::i18n::tr_format!(
+                "voice-save-failed",
+                "Failed to save voice: {error}",
+                error = &error
+            )),
         }
     }
 }

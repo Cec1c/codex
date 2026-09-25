@@ -49,15 +49,15 @@ impl AgentsOverviewView {
         if indices.is_empty() {
             line(
                 if state.connection_notice.is_some() {
-                    "Reconnecting…"
+                    crate::i18n::tr!("agents-reconnecting", "Reconnecting…")
                 } else if state.loading && self.rows.is_empty() {
-                    "Loading tasks…"
+                    crate::i18n::tr!("agents-loading", "Loading tasks…")
                 } else if state.refresh_failed {
-                    "Could not load tasks"
+                    crate::i18n::tr!("agents-load-failed", "Could not load tasks")
                 } else if self.rows.is_empty() {
-                    "No tasks yet"
+                    crate::i18n::tr!("agents-empty", "No tasks yet")
                 } else {
-                    "No matching tasks"
+                    crate::i18n::tr!("agents-no-matches", "No matching tasks")
                 }
                 .dim(),
                 area,
@@ -74,9 +74,9 @@ impl AgentsOverviewView {
         let viewport = row(area, padding, area.height - padding * 2);
         if padding > 0 {
             let (title, status, updated) = columns(row(area, /*offset*/ 0, /*height*/ 1));
-            line("Tasks".dim(), title, buf);
-            line("Status".dim(), status, buf);
-            Line::from("Updated".dim())
+            line(crate::i18n::tr!("agents-tasks", "Tasks").dim(), title, buf);
+            line(crate::i18n::tr!("ui-status", "Status").dim(), status, buf);
+            Line::from(crate::i18n::tr!("ui-updated", "Updated").dim())
                 .right_aligned()
                 .render(updated, buf);
         }
@@ -126,7 +126,12 @@ impl AgentsOverviewView {
                 let count = if count == total {
                     count.to_string()
                 } else {
-                    format!("{count} of {total}")
+                    crate::i18n::tr_format!(
+                        "agents-visible-count",
+                        "{count} of {total}",
+                        count = &count,
+                        total = &total
+                    )
                 };
                 let group = if state.grouping == AgentsOverviewGrouping::Project {
                     crate::text_formatting::center_truncate_path(
@@ -181,7 +186,11 @@ impl AgentsOverviewView {
                     /*height*/ 1,
                 );
                 title.width -= 10;
-                line(Line::from("  current").style(style), badge, buf);
+                line(
+                    Line::from(crate::i18n::tr!("agents-current", "  current")).style(style),
+                    badge,
+                    buf,
+                );
             }
             if task.has_voice && title.width >= 8 {
                 let badge = Rect::new(
@@ -191,7 +200,11 @@ impl AgentsOverviewView {
                     /*height*/ 1,
                 );
                 title.width -= 8;
-                line(Line::from("  voice").style(style), badge, buf);
+                line(
+                    Line::from(crate::i18n::tr!("agents-voice", "  voice")).style(style),
+                    badge,
+                    buf,
+                );
             }
             let title_style = if index == self.selected {
                 style

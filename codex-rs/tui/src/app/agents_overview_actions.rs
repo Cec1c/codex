@@ -47,14 +47,19 @@ struct LifecycleProgress(AgentsOverviewAction);
 impl LifecycleProgress {
     fn header(&self) -> LifecycleHeader {
         let title = match self.0 {
-            AgentsOverviewAction::Archive => "Archiving task…",
-            AgentsOverviewAction::Delete => "Deleting task…",
+            AgentsOverviewAction::Archive => {
+                crate::i18n::tr!("agents-archiving", "Archiving task…")
+            }
+            AgentsOverviewAction::Delete => crate::i18n::tr!("agents-deleting", "Deleting task…"),
         };
         LifecycleHeader(vec![
             title.bold().into(),
-            "Please wait. Task switching is unavailable until this finishes."
-                .dim()
-                .into(),
+            crate::i18n::tr!(
+                "agents-action-wait",
+                "Please wait. Task switching is unavailable until this finishes."
+            )
+            .dim()
+            .into(),
         ])
     }
 }
@@ -123,17 +128,34 @@ impl App {
             .lines()
             .next()
             .filter(|name| !name.is_empty())
-            .unwrap_or("Untitled task");
+            .unwrap_or(crate::i18n::tr!("agents-untitled", "Untitled task"));
         let (title, description, label) = match action {
             AgentsOverviewAction::Archive => (
-                format!("Archive “{name}”?"),
-                "This stops any running work in this task and its child agents, then archives them. Their history can be restored from the resume picker.",
-                "Archive task and child agents",
+                crate::i18n::tr_format!(
+                    "agents-confirm-archive",
+                    "Archive “{name}”?",
+                    name = &name
+                ),
+                crate::i18n::tr!(
+                    "agents-archive-explanation",
+                    "This stops any running work in this task and its child agents, then archives them. Their history can be restored from the resume picker."
+                ),
+                crate::i18n::tr!("agents-archive-children", "Archive task and child agents"),
             ),
             AgentsOverviewAction::Delete => (
-                format!("Permanently delete “{name}”?"),
-                "This stops any running work in this task and its child agents, then permanently deletes their history. This cannot be undone.",
-                "Permanently delete task and child agents",
+                crate::i18n::tr_format!(
+                    "agents-confirm-delete",
+                    "Permanently delete “{name}”?",
+                    name = &name
+                ),
+                crate::i18n::tr!(
+                    "agents-delete-explanation",
+                    "This stops any running work in this task and its child agents, then permanently deletes their history. This cannot be undone."
+                ),
+                crate::i18n::tr!(
+                    "agents-delete-children",
+                    "Permanently delete task and child agents"
+                ),
             ),
         };
         self.chat_widget.show_selection_view(SelectionViewParams {
@@ -143,7 +165,7 @@ impl App {
             ])),
             items: vec![
                 SelectionItem {
-                    name: "Cancel".to_string(),
+                    name: crate::i18n::tr!("ui-cancel", "Cancel").to_string(),
                     dismiss_on_select: true,
                     ..Default::default()
                 },
@@ -305,15 +327,18 @@ impl App {
             ];
             if attempted {
                 header.push(
-                    "Work may have stopped. Resume the task to continue, or retry the action."
-                        .dim()
-                        .into(),
+                    crate::i18n::tr!(
+                        "agents-may-have-stopped",
+                        "Work may have stopped. Resume the task to continue, or retry the action."
+                    )
+                    .dim()
+                    .into(),
                 );
             }
             self.chat_widget.show_selection_view(SelectionViewParams {
                 header: Box::new(LifecycleHeader(header)),
                 items: vec![SelectionItem {
-                    name: "Back to agents".to_string(),
+                    name: crate::i18n::tr!("agents-back", "Back to agents").to_string(),
                     dismiss_on_select: true,
                     ..Default::default()
                 }],

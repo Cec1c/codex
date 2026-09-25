@@ -323,7 +323,7 @@ impl Renderable for FeedbackNoteView {
                     key_hint::plain(KeyCode::PageUp).into(),
                     "/".into(),
                     key_hint::plain(KeyCode::PageDown).into(),
-                    " scroll disclosure".into(),
+                    crate::i18n::tr!("feedback-scroll-disclosure", " scroll disclosure").into(),
                 ]))
                 .render(blank_area, buf);
             }
@@ -333,9 +333,9 @@ impl Renderable for FeedbackNoteView {
         if hint_y < area.y.saturating_add(area.height) {
             Paragraph::new(accept_cancel_hint_line(
                 Some(key_hint::plain(KeyCode::Enter).into()),
-                "to submit",
+                crate::i18n::tr!("feedback-submit-hint", "to submit"),
                 Some(key_hint::plain(KeyCode::Esc).into()),
-                "to cancel",
+                crate::i18n::tr!("feedback-cancel-hint", "to cancel"),
             ))
             .render(
                 Rect {
@@ -382,19 +382,28 @@ impl FeedbackNoteView {
         match self.feedback_audience {
             FeedbackAudience::OpenAiEmployee => {
                 lines.push(
-                    "Your data may be used to improve our models and products"
-                        .bold()
-                        .into(),
+                    crate::i18n::tr!(
+                        "feedback-data-title",
+                        "Your data may be used to improve our models and products"
+                    )
+                    .bold()
+                    .into(),
                 );
                 lines.push(Line::from(vec![
-                    "By submitting feedback, you agree that OpenAI can use your feedback for safety purposes and internal model training, as explained in more detail ".dim(),
+                    crate::i18n::tr!("feedback-data-consent", "By submitting feedback, you agree that OpenAI can use your feedback for safety purposes and internal model training, as explained in more detail ").dim(),
                     "here".fg(crate::style::accent_color()).underlined(),
-                    ". Please avoid sharing tented information under NDA, or privileged, HR-related, or sensitive personal information.".dim(),
+                    crate::i18n::tr!("feedback-data-sensitive", ". Please avoid sharing tented information under NDA, or privileged, HR-related, or sensitive personal information.").dim(),
                 ]));
             }
             FeedbackAudience::External => lines.push(Line::from(vec![
-                "Your feedback can be used to improve ChatGPT. ".dim(),
-                "Learn more".fg(crate::style::accent_color()).underlined(),
+                crate::i18n::tr!(
+                    "feedback-data-chatgpt",
+                    "Your feedback can be used to improve ChatGPT. "
+                )
+                .dim(),
+                crate::i18n::tr!("feedback-learn-more", "Learn more")
+                    .fg(crate::style::accent_color())
+                    .underlined(),
                 ".".dim(),
             ])),
         }
@@ -414,24 +423,56 @@ fn gutter() -> Span<'static> {
 fn feedback_title_and_placeholder(category: FeedbackCategory) -> (String, String) {
     match category {
         FeedbackCategory::BadResult => (
-            "Tell us more (bad result)".to_string(),
-            "(optional) Write a short description to help us further".to_string(),
+            crate::i18n::tr!(
+                "feedback-note-title-bad-result",
+                "Tell us more (bad result)"
+            )
+            .to_string(),
+            crate::i18n::tr!(
+                "feedback-note-placeholder",
+                "(optional) Write a short description to help us further"
+            )
+            .to_string(),
         ),
         FeedbackCategory::GoodResult => (
-            "Tell us more (good result)".to_string(),
-            "(optional) Write a short description to help us further".to_string(),
+            crate::i18n::tr!(
+                "feedback-note-title-good-result",
+                "Tell us more (good result)"
+            )
+            .to_string(),
+            crate::i18n::tr!(
+                "feedback-note-placeholder",
+                "(optional) Write a short description to help us further"
+            )
+            .to_string(),
         ),
         FeedbackCategory::Bug => (
-            "Tell us more (bug)".to_string(),
-            "(optional) Write a short description to help us further".to_string(),
+            crate::i18n::tr!("feedback-note-title-bug", "Tell us more (bug)").to_string(),
+            crate::i18n::tr!(
+                "feedback-note-placeholder",
+                "(optional) Write a short description to help us further"
+            )
+            .to_string(),
         ),
         FeedbackCategory::SafetyCheck => (
-            "Tell us more (safety check)".to_string(),
-            "(optional) Share what was refused and why it should have been allowed".to_string(),
+            crate::i18n::tr!(
+                "feedback-note-title-safety-check",
+                "Tell us more (safety check)"
+            )
+            .to_string(),
+            crate::i18n::tr!(
+                "feedback-note-placeholder-safety-check",
+                "(optional) Share what was refused and why it should have been allowed"
+            )
+            .to_string(),
         ),
         FeedbackCategory::Other => (
-            "Tell us more (other)".to_string(),
-            "(optional) Write a short description to help us further".to_string(),
+            crate::i18n::tr!("feedback-note-title-other", "Tell us more (other)").to_string(),
+            crate::i18n::tr!(
+                "feedback-note-placeholder",
+                "(optional) Write a short description to help us further"
+            )
+            .to_string(),
         ),
     }
 }

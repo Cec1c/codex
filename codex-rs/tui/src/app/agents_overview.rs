@@ -75,36 +75,56 @@ impl App {
         if matches!(self.app_server_target, AppServerTarget::Embedded) {
             let workload_identity_selected = codex_login::is_workload_identity_selected();
             self.chat_widget.show_selection_view(SelectionViewParams {
-                title: Some("Shared agents unavailable".to_string()),
+                title: Some(
+                    crate::i18n::tr!("agents-unavailable", "Shared agents unavailable").to_string(),
+                ),
                 subtitle: Some(
                     if workload_identity_selected {
-                        "The agents dashboard is unavailable while workload identity is active."
+                        crate::i18n::tr!(
+                            "agents-workload-unavailable",
+                            "The agents dashboard is unavailable while workload identity is active."
+                        )
                     } else if cfg!(any(unix, windows)) {
-                        "This session isn’t connected to a shared background server."
+                        crate::i18n::tr!(
+                            "agents-not-connected",
+                            "This session isn’t connected to a shared background server."
+                        )
                     } else {
-                        "Connect to a remote background server to use the agents dashboard."
+                        crate::i18n::tr!(
+                            "agents-connect-remote",
+                            "Connect to a remote background server to use the agents dashboard."
+                        )
                     }
                     .to_string(),
                 ),
                 footer_note: (cfg!(any(unix, windows)) && !workload_identity_selected).then(|| {
                     Line::from(
-                        "Starting a background server will not interrupt or move this session."
-                            .dim(),
+                        crate::i18n::tr!(
+                            "agents-start-guidance",
+                            "Starting a background server will not interrupt or move this session."
+                        )
+                        .dim(),
                     )
                 }),
                 items: [
                     #[cfg(any(unix, windows))]
                     (!workload_identity_selected).then(|| SelectionItem {
-                        name: "Start background server".to_string(),
+                        name: crate::i18n::tr!("agents-start-server", "Start background server")
+                            .to_string(),
                         description: Some(
-                            "Open `codex agents` in another terminal afterward".to_string(),
+                            crate::i18n::tr!(
+                                "agents-open-another-terminal",
+                                "Open `codex agents` in another terminal afterward"
+                            )
+                            .to_string(),
                         ),
                         actions: vec![Box::new(|tx| tx.send(AppEvent::StartAgentsDaemon))],
                         dismiss_on_select: true,
                         ..Default::default()
                     }),
                     Some(SelectionItem {
-                        name: "Return to this session".to_string(),
+                        name: crate::i18n::tr!("agents-return-session", "Return to this session")
+                            .to_string(),
                         dismiss_on_select: true,
                         ..Default::default()
                     }),
@@ -139,9 +159,15 @@ impl App {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.loading = false;
             state.connection_notice = Some(if self.reconnect.failed {
-                "Reconnect failed — agent list is stale; relaunch to retry"
+                crate::i18n::tr!(
+                    "agents-reconnect-failed",
+                    "Reconnect failed — agent list is stale; relaunch to retry"
+                )
             } else {
-                "Reconnecting — agent list is stale"
+                crate::i18n::tr!(
+                    "agents-reconnecting-stale",
+                    "Reconnecting — agent list is stale"
+                )
             });
         } else {
             self.refresh_agents_overview_threads(app_server);
@@ -253,9 +279,10 @@ impl App {
             && state.rename_target.is_some()
         {
             self.chat_widget.add_info_message(
-                format!(
-                    "The rename target disappeared. Unsubmitted title: {}",
-                    state.input
+                crate::i18n::tr_format!(
+                    "agents-rename-target-gone",
+                    "The rename target disappeared. Unsubmitted title: {value}",
+                    value = state.input
                 ),
                 /*hint*/ None,
             );
@@ -441,8 +468,11 @@ impl App {
             {
                 Ok(thread) => thread,
                 Err(error) => {
-                    self.add_agents_overview_error(format!(
-                        "Agent session {root_thread_id} is unavailable: {error}"
+                    self.add_agents_overview_error(crate::i18n::tr_format!(
+                        "agents-session-unavailable",
+                        "Agent session {root_thread_id} is unavailable: {error}",
+                        root_thread_id = &root_thread_id,
+                        error = &error
                     ));
                     return Ok(AppRunControl::Continue);
                 }
@@ -481,8 +511,10 @@ impl App {
                 {
                     Ok(config) => config,
                     Err(error) => {
-                        self.add_agents_overview_error(format!(
-                            "Failed to load task settings: {error}"
+                        self.add_agents_overview_error(crate::i18n::tr_format!(
+                            "agents-load-settings-failed",
+                            "Failed to load task settings: {error}",
+                            error = &error
                         ));
                         return Ok(AppRunControl::Continue);
                     }
@@ -528,8 +560,11 @@ impl App {
                             })
                     {
                         self.add_agents_overview_error(
-                            "Cannot resume task without preserving the selected permissions."
-                                .to_string(),
+                            crate::i18n::tr!(
+                                "agents-permissions-resume",
+                                "Cannot resume task without preserving the selected permissions."
+                            )
+                            .to_string(),
                         );
                         return Ok(AppRunControl::Continue);
                     }
@@ -582,16 +617,21 @@ impl App {
                             Err(_) => {
                                 tracing::warn!("Failed to load read-only conversation history");
                                 self.add_agents_overview_error(
-                                    "Couldn't load this conversation. Please try again."
-                                        .to_string(),
+                                    crate::i18n::tr!(
+                                        "agents-load-retry",
+                                        "Couldn't load this conversation. Please try again."
+                                    )
+                                    .to_string(),
                                 );
                                 return Ok(AppRunControl::Continue);
                             }
                         }
                     }
                     Err(error) => {
-                        self.add_agents_overview_error(format!(
-                            "Failed to attach to task: {error}"
+                        self.add_agents_overview_error(crate::i18n::tr_format!(
+                            "agents-attach-failed",
+                            "Failed to attach to task: {error}",
+                            error = &error
                         ));
                         return Ok(AppRunControl::Continue);
                     }
@@ -687,7 +727,11 @@ impl App {
                 )
                 .await
             {
-                self.add_agents_overview_error(format!("Failed to attach to task: {error}"));
+                self.add_agents_overview_error(crate::i18n::tr_format!(
+                    "agents-attach-failed",
+                    "Failed to attach to task: {error}",
+                    error = &error
+                ));
                 return Ok(AppRunControl::Continue);
             }
             // Replacing the widget clears the terminal before the remaining server requests.
@@ -828,7 +872,11 @@ impl App {
             .is_some_and(|thread_id| self.pending_server_profiles.contains_key(&thread_id))
         {
             self.add_agents_overview_error(
-                "Wait for permissions to update before starting a session.".into(),
+                crate::i18n::tr!(
+                    "agents-permissions-pending",
+                    "Wait for permissions to update before starting a session."
+                )
+                .into(),
             );
             return None;
         }
@@ -855,7 +903,11 @@ impl App {
         {
             Ok(config) => config,
             Err(error) => {
-                self.add_agents_overview_error(format!("Failed to load project settings: {error}"));
+                self.add_agents_overview_error(crate::i18n::tr_format!(
+                    "agents-load-project-failed",
+                    "Failed to load project settings: {error}",
+                    error = &error
+                ));
                 return None;
             }
         };
@@ -888,7 +940,11 @@ impl App {
                     != self.config.permissions.profile_workspace_roots())
         {
             self.add_agents_overview_error(
-                "Permission profile has different settings.".to_string(),
+                crate::i18n::tr!(
+                    "agents-permissions-differ",
+                    "Permission profile has different settings."
+                )
+                .to_string(),
             );
             return None;
         }
@@ -948,8 +1004,10 @@ impl App {
             }
             Ok(None) => {}
             Err(error) => {
-                self.add_agents_overview_error(format!(
-                    "Failed to load new session settings: {error}"
+                self.add_agents_overview_error(crate::i18n::tr_format!(
+                    "agents-load-new-settings-failed",
+                    "Failed to load new session settings: {error}",
+                    error = &error
                 ));
                 return None;
             }
@@ -1017,8 +1075,10 @@ impl App {
             {
                 Ok(turn_id) => turn_id,
                 Err(error) => {
-                    self.add_agents_overview_error(format!(
-                        "Failed to stop background task: {error}"
+                    self.add_agents_overview_error(crate::i18n::tr_format!(
+                        "agents-stop-failed",
+                        "Failed to stop background task: {error}",
+                        error = &error
                     ));
                     self.refresh_agents_overview_threads(app_server);
                     return;
@@ -1029,7 +1089,11 @@ impl App {
             return;
         };
         if let Err(error) = app_server.turn_interrupt(thread_id, turn_id).await {
-            self.add_agents_overview_error(format!("Failed to stop background task: {error}"));
+            self.add_agents_overview_error(crate::i18n::tr_format!(
+                "agents-stop-failed",
+                "Failed to stop background task: {error}",
+                error = &error
+            ));
             self.refresh_agents_overview_threads(app_server);
         }
     }
