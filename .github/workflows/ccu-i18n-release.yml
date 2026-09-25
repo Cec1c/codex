@@ -244,6 +244,8 @@ jobs:
 
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          resolver_retry_script="$(mktemp)"
+          cp .github/scripts/ccu-resolver-retry.py "$resolver_retry_script"
           git switch --detach "$upstream_commit"
           git switch -c "$release_branch"
 
@@ -407,10 +409,12 @@ jobs:
                 exit 1
               fi
 
-              if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$unchanged_conflict" == "true" ]]; then
-                echo "::error::Release is blocked by conflict issue #$issue_number; skipping duplicate resolver dispatch."
-                echo "Release $release_tag remains blocked by issue #$issue_number. No build or publication occurred." >> "$GITHUB_STEP_SUMMARY"
-                exit 1
+              if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+                if ! python3 "$resolver_retry_script" "$GITHUB_REPOSITORY" "$issue_number"; then
+                  echo "::error::Release is blocked by conflict issue #$issue_number; skipping duplicate resolver dispatch."
+                  echo "Release $release_tag remains blocked by issue #$issue_number. No build or publication occurred." >> "$GITHUB_STEP_SUMMARY"
+                  exit 1
+                fi
               fi
 
               gh workflow run ccu-conflict-resolver.lock.yml \

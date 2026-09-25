@@ -51,7 +51,7 @@ jobs:
         run: python3 .github/scripts/ccu-check-release-workflow.py
 
       - name: Verify published patch selection
-        run: python3 -m unittest discover -s .github/scripts -p 'test_ccu_release_patch_range.py'
+        run: python3 -m unittest discover -s .github/scripts -p 'test_ccu_*.py'
 
       - name: Verify CCU TUI contract
         working-directory: codex-rs

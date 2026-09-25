@@ -84,11 +84,15 @@ def main() -> None:
     if any(marker not in workflow for marker in source_markers):
         raise SystemExit("published patches must be validated against their exact upstream tag")
     duplicate_block = workflow.split(
-        'if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$unchanged_conflict" == "true" ]]; then',
+        'if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then',
         1,
     )[1].split("\n              fi", 1)[0]
     if "::error::" not in duplicate_block or "exit 1" not in duplicate_block:
         raise SystemExit("unresolved release conflicts must fail even when dispatch is deduplicated")
+    if 'python3 "$resolver_retry_script" "$GITHUB_REPOSITORY" "$issue_number"' not in duplicate_block:
+        raise SystemExit("scheduled retries must consult the bounded resolver retry policy")
+    if workflow.index('cp .github/scripts/ccu-resolver-retry.py') > workflow.index('git switch --detach'):
+        raise SystemExit("retry helper must be preserved before checking out upstream")
 
     required_markers = [
         'gh issue comment "$issue_number"',

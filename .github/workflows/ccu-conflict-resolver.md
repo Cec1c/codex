@@ -1,5 +1,6 @@
 ---
 name: CCU conflict resolver
+run-name: "CCU conflict resolver #${{ inputs.issue_number }}"
 description: Resolve only machine-reported CCU upstream replay conflicts and hand the result back to deterministic release CI
 on:
   workflow_dispatch:
