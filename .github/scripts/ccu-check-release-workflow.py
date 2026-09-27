@@ -89,8 +89,24 @@ def main() -> None:
         raise SystemExit("unresolved release conflicts must fail even when dispatch is deduplicated")
     if 'python3 "$resolver_retry_script" "$GITHUB_REPOSITORY" "$issue_number"' not in duplicate_block:
         raise SystemExit("scheduled retries must consult the bounded resolver retry policy")
-    if workflow.index('cp .github/scripts/ccu-resolver-retry.py') > workflow.index('git switch --detach'):
+    if workflow.index('cp .github/scripts/ccu-resolver-retry.py') > workflow.index('git switch --detach "$upstream_commit"'):
         raise SystemExit("retry helper must be preserved before checking out upstream")
+
+    lock_markers = [
+        'cp .github/scripts/ccu-sync-release-lock.py "$release_lock_script"',
+        'git switch --detach "$prepared_commit"',
+        'python3 "$release_lock_script" codex-rs --check',
+        'git switch --detach "$upstream_commit"',
+        'python3 "$release_lock_script" codex-rs\n',
+        'git add -- codex-rs/Cargo.lock',
+        'fork_commit="$(git rev-parse HEAD)"',
+        'git push origin "HEAD:refs/heads/$release_branch"',
+    ]
+    lock_positions = [workflow.index(marker) for marker in lock_markers]
+    if lock_positions != sorted(lock_positions):
+        raise SystemExit("release lock must be checked before building and refreshed before pushing replayed patches")
+    if 'ref: ${{ needs.prepare.outputs.fork_commit }}' not in workflow:
+        raise SystemExit("release builds must use the exact validated commit")
 
     required_markers = [
         'gh issue comment "$issue_number"',

@@ -80,6 +80,8 @@ jobs:
           persist-credentials: true
           token: ${{ steps.mirror-maiden-app-token.outputs.token || github.token }}
 
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+
       - name: Prepare upstream-aligned release branch
         id: prepare
         shell: bash
@@ -160,6 +162,9 @@ jobs:
           upstream_commit="$(git rev-list -n 1 "$upstream_tag")"
           upstream_main_commit="$(git rev-parse refs/remotes/upstream/main)"
 
+          release_lock_script="$(mktemp)"
+          cp .github/scripts/ccu-sync-release-lock.py "$release_lock_script"
+
           remote_prepared_commit="$(
             git ls-remote origin "refs/heads/$release_branch" | awk '{print $1}'
           )"
@@ -197,6 +202,8 @@ jobs:
               echo "Prepared ref contains no codex-rs changes" >&2
               exit 1
             fi
+            git switch --detach "$prepared_commit"
+            python3 "$release_lock_script" codex-rs --check
             {
               echo "should_release=true"
               echo "upstream_version=$upstream_version"
@@ -423,6 +430,15 @@ jobs:
             fi
           done
 
+          # Replay can bring the previous release's workspace versions into Cargo.lock.
+          # Keep external dependencies pinned and record the refreshed lock before publishing.
+          python3 "$release_lock_script" codex-rs
+          python3 "$release_lock_script" codex-rs --check
+          if ! git diff --quiet -- codex-rs/Cargo.lock; then
+            git add -- codex-rs/Cargo.lock
+            git commit -m "fix(release): align workspace lock with $upstream_tag"
+          fi
+
           fork_commit="$(git rev-parse HEAD)"
           remote_commit="$(git ls-remote origin "refs/heads/$release_branch" | awk '{print $1}')"
           if [[ -n "$remote_commit" && "$remote_commit" != "$fork_commit" ]]; then
@@ -490,7 +506,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.prepare.outputs.release_branch }}
+          ref: ${{ needs.prepare.outputs.fork_commit }}
           persist-credentials: false
 
       - name: Configure build directory
