@@ -11,6 +11,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::ffi::OsStr;
 use std::io;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -126,6 +128,8 @@ pub fn apply_git_patch(req: &ApplyGitRequest) -> io::Result<ApplyGitResult> {
 
 fn resolve_git_root(cwd: &Path) -> io::Result<PathBuf> {
     let mut command = std::process::Command::new("git");
+    #[cfg(windows)]
+    command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
     command
         .args(["-c", crate::SAFE_BARE_REPOSITORY_CONFIG])
         .arg("rev-parse")
@@ -154,6 +158,8 @@ fn write_temp_patch(diff: &str) -> io::Result<(tempfile::TempDir, PathBuf)> {
 
 fn run_git(cwd: &Path, git_cfg: &[String], args: &[String]) -> io::Result<(i32, String, String)> {
     let mut cmd = std::process::Command::new("git");
+    #[cfg(windows)]
+    cmd.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
     for p in git_cfg {
         cmd.arg(p);
     }
@@ -336,6 +342,8 @@ pub fn stage_paths(git_root: &Path, diff: &str) -> io::Result<()> {
         return Ok(());
     }
     let mut cmd = std::process::Command::new("git");
+    #[cfg(windows)]
+    cmd.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
     cmd.args(["-c", crate::SAFE_BARE_REPOSITORY_CONFIG]);
     cmd.arg("add");
     cmd.arg("--");

@@ -6,6 +6,26 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
 
+#[cfg(windows)]
+#[tokio::test]
+async fn git_subprocess_has_no_console_and_preserves_output() {
+    let mut command = Command::new("powershell.exe");
+    command.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        r#"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); }'; [Console]::Out.WriteLine([ConsoleProbe]::GetConsoleWindow().ToInt64()); [Console]::Error.WriteLine('stderr-ok')"#,
+    ]);
+    let (child, process_tree) = spawn_git_command(&mut command).expect("spawn console probe");
+    let output =
+        wait_for_git_command_with_timeout_output(child, process_tree, Duration::from_secs(30))
+            .await
+            .expect("wait for console probe");
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "0");
+    assert_eq!(String::from_utf8_lossy(&output.stderr).trim(), "stderr-ok");
+}
+
 #[derive(Clone, Copy)]
 enum GitWrapperLifetime {
     WaitForChild,

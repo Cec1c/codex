@@ -3,6 +3,8 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 use serde::Deserialize;
 use std::ffi::OsStr;
 use std::fs;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -88,6 +90,8 @@ fn pack_npm_package(
         |version| format!("{package}@{version}"),
     );
     let mut command = Command::new(npm_command);
+    #[cfg(windows)]
+    command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
     command
         .current_dir(destination)
         .arg("pack")

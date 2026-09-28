@@ -24,6 +24,40 @@ use zip::write::SimpleFileOptions;
 
 const TEST_CURATED_PLUGIN_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
+#[cfg(windows)]
+#[test]
+fn plugin_git_commands_do_not_create_consoles() {
+    let temp = tempdir().expect("create probe directory");
+    let script = temp.path().join("probe.ps1");
+    let wrapper = temp.path().join("git.cmd");
+    std::fs::write(
+        &script,
+        r#"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); }'; [Console]::Out.WriteLine([ConsoleProbe]::GetConsoleWindow().ToInt64()); [Console]::Error.WriteLine('stderr-ok')"#,
+    )
+    .expect("write console probe");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "@\"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -NonInteractive -File \"{}\"\r\n",
+            script.display()
+        ),
+    )
+    .expect("write Git wrapper");
+    for mut command in [
+        git_command(&wrapper).expect("create startup Git command"),
+        crate::PluginGitMode::Manual.command(&wrapper),
+    ] {
+        let output = command.output().expect("run plugin Git probe");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "0");
+        assert_eq!(String::from_utf8_lossy(&output.stderr).trim(), "stderr-ok");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn pretrust_startup_sync_uses_installed_git_with_hostile_path() {

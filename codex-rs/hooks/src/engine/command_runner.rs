@@ -221,6 +221,8 @@ pub(crate) async fn run_command(
     command.current_dir(cwd);
 
     #[cfg(windows)]
+    command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW, including no-job fallback.
+    #[cfg(windows)]
     let mut process_tree_job = JobObject::create().ok();
     #[cfg(windows)]
     let child = match process_tree_job.as_ref() {
@@ -228,7 +230,7 @@ pub(crate) async fn run_command(
             Ok(child) => Ok(child),
             Err(_) => {
                 process_tree_job = None;
-                command.creation_flags(0);
+                command.creation_flags(/*flags*/ 0x0800_0000); // Clear suspension, retain CREATE_NO_WINDOW.
                 command.spawn()
             }
         },
@@ -345,10 +347,13 @@ impl Drop for ProcessTreeGuard {
 
         #[cfg(windows)]
         {
+            use std::os::windows::process::CommandExt;
+
             if let Some(job) = self.job.as_ref() {
                 let _ = job.terminate();
             } else {
                 let _ = std::process::Command::new("taskkill")
+                    .creation_flags(/*flags*/ 0x0800_0000) // CREATE_NO_WINDOW
                     .args(["/PID", &process_id.to_string(), "/T", "/F"])
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())

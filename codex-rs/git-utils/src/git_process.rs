@@ -46,8 +46,9 @@ fn spawn_git_command(command: &mut Command) -> Option<(Child, KillGitProcessTree
     {
         Ok((child, job)) => (child, Some(job)),
         Err(_) => {
-            // A failed contained spawn leaves CREATE_SUSPENDED on the command.
-            command.creation_flags(0);
+            // Clear suspension on fallback, but do not let a detached daemon
+            // open a console for a background Git probe.
+            command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
             (command.spawn().ok()?, None)
         }
     };

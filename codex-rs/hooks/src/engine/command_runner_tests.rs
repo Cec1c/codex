@@ -36,6 +36,31 @@ use super::default_shell_program;
 use super::run_command;
 use crate::events::user_prompt_submit::UserPromptSubmitRequest;
 
+#[cfg(windows)]
+#[tokio::test]
+async fn hook_has_no_console_and_preserves_stdio() {
+    let temp = tempdir().expect("create temp dir");
+    let handler = write_handler(
+        &temp,
+        r#"import ctypes
+import sys
+ctypes.windll.kernel32.GetConsoleWindow.restype = ctypes.c_void_p
+print(ctypes.windll.kernel32.GetConsoleWindow() or 0)
+print(sys.stdin.read())
+print("stderr-ok", file=sys.stderr)
+"#,
+    );
+    let ConfiguredHandlerKind::Command { command, env, .. } = &handler.kind else {
+        panic!("expected command hook");
+    };
+    let (runtime, _result_receiver) = runtime();
+    let result = run_command(&runtime, &handler, command, env, "{}", temp.path()).await;
+    assert_eq!(result.exit_code, Some(0), "stderr: {}", result.stderr);
+    assert_eq!(result.stdout.lines().collect::<Vec<_>>(), vec!["0", "{}"]);
+    assert_eq!(result.stderr.trim(), "stderr-ok");
+    assert_eq!(result.error, None);
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn hook_shell_startup_does_not_stop_on_controlling_terminal() {

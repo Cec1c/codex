@@ -1,5 +1,7 @@
 use std::ffi::OsStr;
 use std::ffi::OsString;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -131,6 +133,8 @@ where
     }
     let command_string = build_command_string(&args_vec);
     let mut command = Command::new("git");
+    #[cfg(windows)]
+    command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
     command.current_dir(dir);
     if let Some(envs) = env {
         for (key, value) in envs {

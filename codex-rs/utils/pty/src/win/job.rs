@@ -14,6 +14,7 @@ use winapi::um::jobapi2::SetInformationJobObject;
 use winapi::um::jobapi2::TerminateJobObject;
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::processthreadsapi::TerminateProcess;
+use winapi::um::winbase::CREATE_NO_WINDOW;
 use winapi::um::winbase::CREATE_SUSPENDED;
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::JOB_OBJECT_LIMIT_BREAKAWAY_OK;
@@ -121,9 +122,11 @@ impl JobObject {
         }
     }
 
-    /// Prevents a child from running before it can be assigned to this job.
+    /// Starts a non-interactive child without a console and suspends it for job assignment.
     pub fn prepare_suspended_spawn(&self, command: &mut Command) {
-        command.creation_flags(CREATE_SUSPENDED).kill_on_drop(true);
+        command
+            .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW)
+            .kill_on_drop(true);
     }
 
     /// Assigns and resumes a suspended child, returning whether assignment succeeded.

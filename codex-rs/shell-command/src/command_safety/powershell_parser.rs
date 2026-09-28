@@ -7,6 +7,8 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::ErrorKind;
 use std::io::Write;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::Child;
 use std::process::ChildStdin;
 use std::process::ChildStdout;
@@ -114,6 +116,8 @@ struct PowershellParserProcess {
 impl PowershellParserProcess {
     fn spawn(executable: &str) -> std::io::Result<Self> {
         let mut command = Command::new(executable);
+        #[cfg(windows)]
+        command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
         command
             .args([
                 "-NoLogo",
@@ -271,6 +275,39 @@ mod tests {
     use super::*;
     use crate::powershell::try_find_powershell_executable_blocking;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn parser_process_has_no_console_and_preserves_protocol() {
+        let powershell = try_find_powershell_executable_blocking().expect("find PowerShell");
+        let mut parser = PowershellParserProcess::spawn(powershell.as_path().to_str().unwrap())
+            .expect("spawn PowerShell parser");
+        assert_eq!(
+            parser
+                .parse("Get-Content 'foo bar'")
+                .expect("parse command"),
+            PowershellParseOutcome::Commands(vec![vec![
+                "Get-Content".to_string(),
+                "foo bar".to_string(),
+            ]]),
+        );
+        // Inspect the live parser from a separate process, without changing its console.
+        // A target without a console returns ERROR_INVALID_HANDLE (6).
+        let pid = parser.child.id();
+        let output = Command::new(powershell.as_path())
+            .creation_flags(/*flags*/ 0x0800_0000) // CREATE_NO_WINDOW
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!(
+                    r#"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class ConsoleProbe {{ [DllImport("kernel32.dll")] public static extern bool FreeConsole(); [DllImport("kernel32.dll", SetLastError=true)] public static extern bool AttachConsole(uint pid); [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); public static long Inspect(uint pid) {{ FreeConsole(); if (AttachConsole(pid)) return GetConsoleWindow().ToInt64(); int error = Marshal.GetLastWin32Error(); if (error == 6) return 0; throw new System.ComponentModel.Win32Exception(error); }} }}'; $writer = [Console]::Out; $window = [ConsoleProbe]::Inspect({pid}); $writer.WriteLine($window)"#,
+                ),
+            ])
+            .output()
+            .expect("inspect parser console");
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "0",);
+    }
 
     #[test]
     fn parser_process_handles_multiple_requests() {

@@ -1,5 +1,7 @@
 use super::MarketplaceAddError;
 use std::fs;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -112,6 +114,8 @@ pub(super) fn marketplace_staging_root(install_root: &Path) -> PathBuf {
 
 fn run_git(args: &[&str], cwd: Option<&Path>) -> Result<(), MarketplaceAddError> {
     let mut command = Command::new("git");
+    #[cfg(windows)]
+    command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
     command
         .args(["-c", codex_git_utils::SAFE_BARE_REPOSITORY_CONFIG])
         .args(args);

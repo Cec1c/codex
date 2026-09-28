@@ -272,7 +272,7 @@ async fn contained_spawn_owns_immediate_descendant() -> anyhow::Result<()> {
         .args([
             "-u",
             "-c",
-            "import subprocess,sys; child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); print(child.pid,flush=True); child.wait()",
+            "import ctypes,subprocess,sys; ctypes.windll.kernel32.GetConsoleWindow.restype=ctypes.c_void_p; print(ctypes.windll.kernel32.GetConsoleWindow() or 0,flush=True); child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); print(child.pid,flush=True); child.wait()",
         ])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -285,6 +285,13 @@ async fn contained_spawn_owns_immediate_descendant() -> anyhow::Result<()> {
         .take()
         .ok_or_else(|| anyhow::anyhow!("missing contained process stdout"))?;
     let mut stdout = BufReader::new(stdout);
+    let mut console_window = String::new();
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        stdout.read_line(&mut console_window),
+    )
+    .await??;
+    assert_eq!(console_window.trim(), "0");
     let mut child_pid = String::new();
     tokio::time::timeout(Duration::from_secs(10), stdout.read_line(&mut child_pid)).await??;
     let child_pid: u32 = child_pid.trim().parse()?;

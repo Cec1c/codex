@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 
 use codex_utils_absolute_path::AbsolutePathBuf;
@@ -105,7 +107,10 @@ pub fn try_find_powershell_executable_blocking() -> Option<AbsolutePathBuf> {
 /// has installed pwsh.exe, it may not be available in the system PATH, in which
 /// case we attempt to locate it via other means.
 pub fn try_find_pwsh_executable_blocking() -> Option<AbsolutePathBuf> {
-    if let Some(ps_home) = std::process::Command::new("cmd")
+    let mut command = std::process::Command::new("cmd");
+    #[cfg(windows)]
+    command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
+    if let Some(ps_home) = command
         .args(["/C", "pwsh", "-NoProfile", "-Command", "$PSHOME"])
         .output()
         .ok()
@@ -150,7 +155,10 @@ fn try_find_powershellish_executable_in_path(candidates: &[&str]) -> Option<Abso
 
 fn is_powershellish_executable_available(powershell_or_pwsh_exe: &std::path::Path) -> bool {
     // This test works for both powershell.exe and pwsh.exe.
-    std::process::Command::new(powershell_or_pwsh_exe)
+    let mut command = std::process::Command::new(powershell_or_pwsh_exe);
+    #[cfg(windows)]
+    command.creation_flags(/*flags*/ 0x0800_0000); // CREATE_NO_WINDOW
+    command
         .args(["-NoLogo", "-NoProfile", "-Command", "Write-Output ok"])
         .output()
         .map(|output| output.status.success())
@@ -165,6 +173,36 @@ mod tests {
     use super::parse_powershell_command_into_plain_commands;
     use super::parse_powershell_script_into_plain_commands;
     use super::prefix_powershell_script_with_utf8;
+
+    #[cfg(windows)]
+    #[test]
+    fn availability_probe_does_not_create_a_console() {
+        let temp = tempfile::tempdir().expect("create probe directory");
+        let evidence = temp.path().join("console.txt");
+        let script = temp.path().join("probe.ps1");
+        let wrapper = temp.path().join("probe.cmd");
+        let evidence_path = evidence.display().to_string().replace('\'', "''");
+        std::fs::write(
+            &script,
+            format!(
+                r#"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class ConsoleProbe {{ [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); }}'; [IO.File]::WriteAllText('{evidence_path}', [ConsoleProbe]::GetConsoleWindow().ToInt64().ToString())"#
+            ),
+        )
+        .expect("write console probe");
+        std::fs::write(
+            &wrapper,
+            format!(
+                "@powershell.exe -NoProfile -NonInteractive -File \"{}\"\r\n",
+                script.display()
+            ),
+        )
+        .expect("write probe wrapper");
+        assert!(super::is_powershellish_executable_available(&wrapper));
+        pretty_assertions::assert_eq!(
+            std::fs::read_to_string(evidence).expect("read console handle"),
+            "0"
+        );
+    }
 
     #[test]
     fn extracts_basic_powershell_command() {
