@@ -1,0 +1,38 @@
+name: CCU weekly maintenance reminder
+
+on:
+  schedule:
+    # Monday 10:17 Asia/Shanghai. No builds, releases, or resolver dispatches.
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview the report without sending a maintenance reminder
+        type: boolean
+        default: true
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+
+concurrency:
+  group: ccu-weekly-maintenance
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.repository == 'Cec1c/codex'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Check pending maintenance and the seven-day reminder interval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CCU_REMINDER_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: python3 .github/scripts/ccu-weekly-maintenance.py

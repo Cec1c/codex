@@ -1,8 +1,7 @@
 name: CCU i18n release
 
 on:
-  schedule:
-    - cron: "17 */6 * * *"
+  # Releases are opt-in. The weekly maintenance workflow only reports pending work.
   workflow_dispatch:
     inputs:
       upstream_tag:
@@ -43,6 +42,7 @@ permissions: {}
 
 jobs:
   prepare:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
       actions: write

@@ -6,6 +6,7 @@ on:
       - ".github/scripts/ccu-*"
       - ".github/scripts/test_ccu_*"
       - ".github/workflows/ccu-i18n-*.yml"
+      - ".github/workflows/ccu-weekly-maintenance.yml"
       - "codex-rs/tui/**"
       - "docs/ccu/**"
   push:
@@ -15,6 +16,7 @@ on:
       - ".github/scripts/ccu-*"
       - ".github/scripts/test_ccu_*"
       - ".github/workflows/ccu-i18n-*.yml"
+      - ".github/workflows/ccu-weekly-maintenance.yml"
       - "codex-rs/tui/**"
       - "docs/ccu/**"
 
@@ -45,7 +47,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Verify workflows
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/ccu-i18n-ci.yml .github/workflows/ccu-i18n-release.yml
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/ccu-i18n-ci.yml .github/workflows/ccu-i18n-release.yml .github/workflows/ccu-weekly-maintenance.yml
 
       - name: Verify conflict handoff ordering
         run: python3 .github/scripts/ccu-check-release-workflow.py
